@@ -5,7 +5,7 @@ import { captureSnapshot } from '../lib/snapshot.js'
 import { extractPage } from '../lib/extract.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const runtime = path.resolve(here, '..', 'runtime')
+const runtime = path.join(here, '.tmp')
 
 const config = {
   mode: 'launch',
