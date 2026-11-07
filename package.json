@@ -1,9 +1,18 @@
 {
   "name": "@future/dsh-browser-tool",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Browser operation tools for DeepSeek Harness: persistent login, snapshot refs, extraction, screenshots, network capture and batch collection.",
+  "description": "Silent, long-running browser runtime for DeepSeek Harness: persistent login, headless/offscreen visibility, watchdog recovery, snapshot refs, layered extraction, network capture, batch collection and multi-agent workspaces.",
+  "license": "MIT",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "browser-automation",
+    "playwright",
+    "mcp",
+    "agent"
+  ],
   "exports": {
     ".": "./index.js",
     "./locale/*.json": "./locale/*.json",
@@ -15,7 +24,14 @@
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
-    "README.md"
+    "README.md",
+    "README.en.md",
+    "LICENSE",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    "CHANGELOG.md",
+    "docs/*.md",
+    "skills/**"
   ],
   "dependencies": {
     "playwright-core": "1.64.1"

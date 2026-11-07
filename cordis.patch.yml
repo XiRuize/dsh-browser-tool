@@ -4,8 +4,7 @@
       config:
         mode: launch
         channel: msedge
-        headless: false
-        userDataDir: 'C:/Users/生升/Desktop/未来/浏览器操作工具/runtime/profile'
-        artifactDir: 'C:/Users/生升/Desktop/未来/浏览器操作工具/runtime/artifacts'
-        downloadsDir: 'C:/Users/生升/Desktop/未来/浏览器操作工具/runtime/downloads'
-        idleCloseMs: 900000
+        visibility: headless
+        idleCloseMs: 0
+        watchdogIntervalMs: 30000
+        autoRelaunch: true

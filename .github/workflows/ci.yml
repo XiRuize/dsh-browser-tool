@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Node ${{ matrix.node-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version:
+          - 20
+          - 22
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Syntax check JavaScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=$(find . -path ./node_modules -prune -o -path ./.git -prune -o \( -name '*.js' -o -name '*.mjs' \) -print | sort)
+          if [ -z "$files" ]; then
+            echo "No JavaScript files found."
+            exit 0
+          fi
+          failed=0
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            echo "node --check $file"
+            if ! node --check "$file"; then
+              failed=1
+            fi
+          done <<< "$files"
+          exit "$failed"
+
+      - name: Unit tests (browser-free)
+        if: ${{ hashFiles('test/unit.mjs') != '' }}
+        run: node test/unit.mjs
+
+      - name: Note
+        if: ${{ hashFiles('test/unit.mjs') == '' }}
+        run: echo "test/unit.mjs not present yet; skipping browser-free unit tests."

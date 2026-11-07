@@ -1,49 +1,126 @@
 # @future/dsh-browser-tool
 
-给 DeepSeek Harness 的 Host 工具插件：一个带持久化登录态的真实 Edge/Chromium 浏览器，以及面向“浏览—定位—提取—存证—批处理”的工具面。
+给 [DeepSeek Harness](https://github.com/deepseek-ai) 的浏览器操作插件：一个可长期驻留、默认后台静默的真实 Edge / Chromium 浏览器，加上面向「浏览 → 定位 → 提取 → 存证 → 批处理」的工具面。
 
-这不是另一个 LLM 浏览器 Agent。浏览器里的每一步由当前模型通过工具调用完成：先拿页面快照和 `@eN` 引用，再点按/填写；需要大段内容时用提取工具，而不是把整页塞回上下文。
+![status](https://img.shields.io/badge/status-0.2.0%20in%20progress-yellow)
+![license](https://img.shields.io/badge/license-MIT-blue)
+![runtime](https://img.shields.io/badge/runtime-Node.js%2020%2B%20%7C%2022-339933)
 
-## 工具
+> **版本状态**：`0.2.0` 仍在实现中。本文档按 v0.2 的模块契约（[`docs/MODULE-CONTRACT.md`](docs/MODULE-CONTRACT.md)）描述目标行为，标注「0.2.0 实现中」的能力可能尚未全部合入当前源码。已交付的基线是 `0.1.0`（详见 [`CHANGELOG.md`](CHANGELOG.md)）。本仓库尚未发布到 GitHub，也没有在 CI 上跑过实机验收。
 
-| 工具 | 用途 |
-|---|---|
-| `browser_open` | 打开 URL、复用标签页、把窗口带到前台；返回快照。不传 `url` 就是“聚焦当前页” |
-| `browser_snapshot` | 可操作快照：链接、按钮、输入框、标题、iframe，带 `@e1` 引用 |
-| `browser_act` | `click` / `type` / `press` / `scroll` / `select` / `check` / `hover` / `back` / `forward` / `reload` / `wait` |
-| `browser_extract` | `text` / `html` / `links` / `tables` / `labeled` / `structured`；过长自动落盘 |
-| `browser_screenshot` | 页面/元素截图，返回绝对路径与尺寸，可用 `read_image` 查看 |
-| `browser_tabs` | `list` / `switch` / `close`，标签页有稳定 `t1`、`t2` 编号 |
-| `browser_network` | 捕获 XHR/fetch 响应，读前端接口返回的 JSON |
-| `browser_collect` | 同一套提取在最多 20 个 URL 上并发执行，结果保存 JSON |
-| `browser_download` | 直接按 URL 下载（共享 cookie），或点击元素等待浏览器下载 |
-| `browser_close` | 关闭浏览器、释放配置目录锁；登录态仍保留在 profile 中 |
+## 定位
+
+这不是另一个「LLM 自己开浏览器」的黑盒 Agent。浏览器里的每一步，都由当前模型通过工具调用显式完成：
+
+1. 先读实际状态（`browser_observe` 分层观测 / `browser_inspect` 深层检查）；
+2. 按容器、题号、`@eN` 引用或 CSS selector 定位；
+3. 执行动作（`browser_act`）；
+4. 回读核验（动作返回真实 `value` / `checked` / URL / 元素存在性）；
+5. 需要留痕时落盘（截图、提取全文、JSON、HAR）；
+6. **最终提交 / 提交表单 / 交卷永远留给人**——插件不自动提交，也不绕过验证码。
+
+这套流程借用了 [`chrome-quiz-copilot`](https://github.com/Ruoyu-Tianyi/chrome-quiz-copilot) 的核心思想，并泛化为通用的浏览器调研与分段协作流程（见 [`skills/browser-field-ops/SKILL.md`](skills/browser-field-ops/SKILL.md)）。
+
+## 与 DSH 社区的关系
+
+- 本插件是 DSH Host 插件，通过 `ctx.tools.register` 暴露工具，不修改 DSH 本体。
+- 目标是把方案整理成可开源、可被 DSH 社区复用的 bundle：MIT 许可、双语文档、安全声明、测试与 CI。
+- 与官方 `browserUse` 服务的关系：采用**可选注册**——服务存在时注册 provider 名，失败则降级并记录 warning，不硬依赖（提案见 [`docs/upstream-proposal.md`](docs/upstream-proposal.md)）。
+- 包名暂时保留 `@future/dsh-browser-tool` 以兼容当前 profile；社区发布时的中性包名建议写在同一份提案里。
+
+## 核心能力
+
+### 默认静默
+
+- `visibility` 默认 `headless`：不弹窗、不抢焦点。
+- 永远不调用 `page.bringToFront()`，除非调用方显式要求可见。
+- 需要人工登录 / 验证码时，用 `visibility=window` 临时切到可见，由人完成，再切回后台。
+
+### 长时运行与崩溃恢复
+
+- `idleCloseMs` 默认 `0`：空闲不自动关闭。
+- 30 秒 watchdog（`watchdogIntervalMs=30000`）检测连接与标签页健康。
+- `autoRelaunch=true`：浏览器断开后，下一次工具调用自动重启一次，并返回 `recovered` 提示。
+- 登录态保存在独立 `userDataDir`，关浏览器不丢 Cookie。
+
+### 多子代理工作区
+
+- `browser_workspace` 支持 `create` / `join` / `status` / `grant` / `handoff` / `close`。
+- 角色分 `reader` / `writer`：reader 只能观测与提取，写动作会被拒绝。
+- 每个标签页有稳定 ID 与 owner；同一标签页的写操作串行（per-tab `read` / `write` 锁），不同标签页可并行。
+- 租约带过期时间；交接（handoff）时写摘要，避免重复操作。
+
+### 分层观测与深层前端检查
+
+- `browser_observe` 一次按 `layers` 返回 `structure` / `text` / `visual` / `network` / `console` / `meta`，支持 `selector` / `ref` / `offset` / `limit` / `nextCursor`，超限自动落盘。
+- `browser_inspect` 支持 `overview` / `dom` / `html` / `css` / `a11y` / `box` / `resources` / `scripts` / `storage` / `console` / `performance` / `eval`。
+- 任意 JS `eval` 默认关闭（`allowEval=false`），开启是显式高风险决定。
+- 产物路径限制在 `artifactDir`；`allowAbsoluteArtifacts=false` 时拒绝越界绝对路径。
 
 ## 安装
 
-插件已经在当前桌面 profile 安装并激活。源码位置：
+插件以 bundle 形式安装，源码目录就是本仓库。安装动作通过 DSH 的 `plugin_manager` 完成（写入当前 profile 的 bundle 组合）。
+
+### 通过 Plugin Manager 安装本地目录
+
+在 DSH 会话中让主代理执行（等价于 `plugin_manager install_bundle`）：
 
 ```text
-未来/浏览器操作工具/dsh-browser-tool
+plugin_manager install_bundle target=C:\Users\生升\Documents\deepseek-harness\default-workspace\browser-tool
 ```
 
-手工重装（在 DSH 里通过 Plugin Manager 安装本地 bundle 目录）：
-
-```text
-C:\Users\生升\Desktop\未来\浏览器操作工具\dsh-browser-tool
-```
-
-安装前先装依赖（本地目录安装会直接链接源码，依赖需在源码目录可见）：
+安装前先安装依赖（本地目录安装会链接源码，依赖必须在源码目录可见）：
 
 ```powershell
-node <bundled-node> <bundled-pnpm> install --prod --ignore-scripts
+$node = 'C:\Users\生升\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\node\bin\node.exe'
+$pnpm = 'C:\Users\生升\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\pnpm\bin\pnpm.cjs'
+& $node $pnpm install --prod --ignore-scripts
 ```
 
-本机使用 `C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`，通过 Playwright `channel: msedge` 启动，不需要额外下载 Chromium。
+本机使用 Edge，通过 Playwright `channel: msedge` 启动，不需要额外下载 Chromium：
+
+```text
+C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
+```
+
+安装完成后，profile 的 Cordis 组合中应出现 `browser-tool` 条目；若工具列表没有 `browser_*`，见 [`docs/installation.md`](docs/installation.md) 与 [`docs/troubleshooting.md`](docs/troubleshooting.md)。
 
 ## 配置
 
-配置写在 bundle 的 `cordis.patch.yml`。当前值：
+配置写在 bundle 的 `cordis.patch.yml`，由插件在 `apply(ctx, rawConfig)` 中通过 `lib/config.js` 的 `resolveConfig` 归一化；插件**不导出 `Config` / `ConfigSchema`**，Loader 直接把原始 config 交给 `apply`。下表是 v0.2 的默认值：
+
+| 字段 | 默认 | 说明 |
+|---|---|---|
+| `mode` | `launch` | `launch` 启动独立 profile；`cdp` 连接已启动的浏览器 |
+| `channel` | `msedge` | Playwright 通道：`msedge` / `chrome` / `chromium` |
+| `executablePath` | 空 | 浏览器 exe 绝对路径；设置后忽略 `channel` |
+| `cdpUrl` | 空 | `mode=cdp` 时的地址，例如 `http://127.0.0.1:9222` |
+| `dshHome` | `$DSH_HOME` 或 `~/.dsh` | 默认目录的根；一般不用改 |
+| `userDataDir` | `~/.dsh/browser-tool/profile` | 登录态 / Cookie 持久化目录 |
+| `artifactDir` | `~/.dsh/browser-tool/artifacts` | 截图、全文、采集 JSON、HAR |
+| `downloadsDir` | `~/.dsh/browser-tool/downloads` | 下载文件 |
+| `visibility` | `headless` | `headless` / `offscreen` / `window`；`headless` 仅作兼容别名 |
+| `locale` | `zh-CN` | 浏览器 locale |
+| `timezoneId` | `Asia/Shanghai` | 时区 |
+| `actionTimeoutMs` | `15000` | 单步动作超时 |
+| `navigationTimeoutMs` | `45000` | 页面导航超时 |
+| `snapshotMaxChars` | `12000` | 快照字符预算 |
+| `extractMaxChars` | `30000` | 提取返回上限（超出落盘） |
+| `collectConcurrency` | `2` | 批量采集并发，最大 4 |
+| `collectDelayMs` | `800` | 批量采集每条间隔 |
+| `collectRenderWaitMs` | `700` | 采集渲染等待 |
+| `idleCloseMs` | `0` | 空闲自动关闭；`0` 表示不自动关 |
+| `watchdogIntervalMs` | `30000` | 健康检查间隔 |
+| `autoRelaunch` | `true` | 断开后自动重启 |
+| `maxTabs` | `24` | 标签页上限 |
+| `maxIdleTabs` | `8` | 空闲标签页上限 |
+| `idleTabMs` | `600000` | 空闲页回收阈值（10 分钟） |
+| `allowEval` | `false` | 是否允许 `browser_inspect` 的 `eval` 模式 |
+| `allowAbsoluteArtifacts` | `false` | 是否允许产物写到 `artifactDir` 之外的绝对路径 |
+| `networkMaxEntries` | `80` | 网络记录条数上限 |
+| `networkMaxBodyChars` | `120000` | 单条响应体上限 |
+
+当前仓库的 `cordis.patch.yml` 只写与默认不同的常用项，其余由 `resolveConfig` 补齐：
 
 ```yaml
 - insert:
@@ -52,86 +129,121 @@ node <bundled-node> <bundled-pnpm> install --prod --ignore-scripts
       config:
         mode: launch
         channel: msedge
-        headless: false
-        userDataDir: 'C:/Users/生升/Desktop/未来/浏览器操作工具/runtime/profile'
-        artifactDir: 'C:/Users/生升/Desktop/未来/浏览器操作工具/runtime/artifacts'
-        downloadsDir: 'C:/Users/生升/Desktop/未来/浏览器操作工具/runtime/downloads'
-        idleCloseMs: 900000
+        visibility: headless
+        idleCloseMs: 0
+        watchdogIntervalMs: 30000
+        autoRelaunch: true
 ```
 
-| 字段 | 默认 | 说明 |
+默认目录在 `~/.dsh/browser-tool/` 下，不再硬编码任何 Desktop 路径。若要沿用旧版本的登录态（例如原来指向 `Desktop/未来/浏览器操作工具/runtime/profile`），必须显式配置 `userDataDir`，否则会使用新的空 profile。
+
+## 工具清单
+
+完整参数、返回结构与错误语义见 [`docs/tools.md`](docs/tools.md)。
+
+| 工具 | 用途 | 状态 |
 |---|---|---|
-| `mode` | `launch` | `launch` 启动独立 profile；`cdp` 连接已启动的浏览器 |
-| `channel` | `msedge` | Playwright 通道：`msedge` / `chrome` / `chromium` |
-| `executablePath` | 空 | 浏览器 exe 绝对路径；设置后忽略 `channel` |
-| `cdpUrl` | 空 | `mode=cdp` 时的地址，例如 `http://127.0.0.1:9222` |
-| `userDataDir` | `%DSH_HOME%/browser-tool/profile` | 登录态/Cookie 的持久化目录 |
-| `headless` | `false` | 需要人工登录/验证码时必须为 false |
-| `artifactDir` | `%DSH_HOME%/browser-tool/artifacts` | 截图、全文、采集 JSON |
-| `downloadsDir` | `%DSH_HOME%/browser-tool/downloads` | 下载文件 |
-| `actionTimeoutMs` | `15000` | 单步动作超时 |
-| `navigationTimeoutMs` | `45000` | 页面导航超时 |
-| `snapshotMaxChars` | `12000` | 快照上限 |
-| `extractMaxChars` | `30000` | 提取返回上限（超出落盘） |
-| `collectConcurrency` | `2` | 批量采集默认并发，最大 4 |
-| `collectDelayMs` | `800` | 批量采集每条间隔 |
-| `idleCloseMs` | `900000` | 空闲 15 分钟后自动关闭；0 表示不自动关 |
-| `networkMaxEntries` | `80` | 网络记录条数上限 |
-| `networkMaxBodyChars` | `120000` | 单条响应体上限 |
+| `browser_open` | 打开 / 复用标签页，返回快照 | 0.1.0 已有 |
+| `browser_snapshot` | 可操作快照（带 `@eN`），`browser_observe` 的兼容别名 | 0.1.0 已有 |
+| `browser_observe` | 按层观测：structure / text / visual / network / console / meta | 0.2.0 实现中 |
+| `browser_inspect` | DOM / HTML / CSS / a11y / 资源 / 存储 / 性能 / eval | 0.2.0 实现中 |
+| `browser_act` | click / type / press / scroll / select / check / hover / drag / upload / back / forward / reload / wait / waitFor | 0.1.0 已有，v0.2 扩展 |
+| `browser_extract` | text / html / links / tables / labeled / structured / markdown / images / forms | 0.1.0 已有，v0.2 扩展 |
+| `browser_screenshot` | 页面 / 元素 / 整页截图 | 0.1.0 已有 |
+| `browser_tabs` | list / switch / close / claim / release | 0.1.0 已有，v0.2 扩展 |
+| `browser_workspace` | create / join / status / grant / handoff / close | 0.2.0 实现中 |
+| `browser_network` | start / stop / list / get / export(HAR) | 0.1.0 已有，v0.2 扩展 |
+| `browser_collect` | 游标 + checkpoint 的可续跑批处理 | 0.1.0 已有，v0.2 扩展 |
+| `browser_download` | 按 URL 下载（共享 cookie）或点击元素下载 | 0.1.0 已有 |
+| `browser_status` | 浏览器 / 标签页 / 锁 / 工作区 / 最近错误诊断 | 0.2.0 实现中 |
+| `browser_close` | 关闭浏览器、释放目录锁，保留登录态 | 0.1.0 已有 |
 
-> 插件通过 `apply(ctx, rawConfig)` 自己解析配置；不导出 `Config`，因为当前 Loader 期望 `Config` 是带 `validate()` 的 schemastery 对象。字段仍以本文和 `index.js` 的 `ConfigSchema` 为准。
+## 仓库结构
 
-### 使用已登录的真实浏览器（推荐给企查查）
-
-独立 profile 第一次用企查查需要手动登录。若希望直接复用你日常浏览器的登录态，用 CDP：
-
-1. 完全退出那个浏览器，再用调试端口启动（示例为 Edge）：
-
-```powershell
-& 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe' `
-  --remote-debugging-port=9222 `
-  --user-data-dir="C:\Users\生升\Desktop\未来\浏览器操作工具\runtime\cdp-profile"
+```text
+browser-tool/
+├─ index.js                 # 插件入口：apply(ctx, rawConfig)
+├─ cordis.patch.yml         # bundle patch 示例
+├─ package.json             # 依赖与 dsh.bundle 声明
+├─ lib/
+│  ├─ config.js             # 配置归一化（v0.2 默认值）
+│  ├─ host.js               # 浏览器启动 / 静默 / watchdog / 恢复
+│  ├─ manager.js            # 管理器门面：页面、工作区、锁
+│  ├─ pages.js              # 标签页与 owner（0.2.0 实现中）
+│  ├─ workspace.js          # 工作区 / 租约 / ACL（0.2.0 实现中）
+│  ├─ locks.js              # per-tab 读写锁（0.2.0 实现中）
+│  ├─ snapshot.js           # 快照与引用
+│  ├─ observe.js            # 分层观测（0.2.0 实现中）
+│  ├─ inspect.js            # 深层前端检查（0.2.0 实现中）
+│  ├─ artifacts.js          # 产物库与 manifest（0.2.0 实现中）
+│  ├─ console.js            # console 环形记录（0.2.0 实现中）
+│  ├─ act.js                # 动作与回读核验（0.2.0 实现中）
+│  ├─ extract.js            # 提取
+│  ├─ network.js            # 网络捕获
+│  ├─ collect.js            # 可续跑批处理（0.2.0 实现中）
+│  ├─ tools.js              # 工具注册
+│  └─ util.js               # 工具函数
+├─ docs/
+│  ├─ MODULE-CONTRACT.md    # 实现子代理之间的接口契约
+│  ├─ architecture.md       # 分层架构与生命周期
+│  ├─ tools.md              # 工具参考
+│  ├─ subagents.md          # 多子代理协作指南
+│  ├─ installation.md       # 安装与 profile 排查
+│  ├─ troubleshooting.md    # 常见问题
+│  ├─ upstream-proposal.md  # 面向 DSH 社区的提案
+│  └─ install-verification.md # 安装验收记录（模板）
+├─ skills/
+│  └─ browser-field-ops/    # Agent Skill：浏览器分段协作流程
+├─ test/                    # smoke / deep / live-server / qcc；unit、e2e 0.2.0 实现中
+├─ .github/                 # CI 与 issue / PR 模板
+├─ LICENSE
+├─ SECURITY.md
+├─ CONTRIBUTING.md
+└─ CHANGELOG.md
 ```
 
-2. 把插件配置改为：
+## 安全边界
 
-```yaml
-config:
-  mode: cdp
-  cdpUrl: 'http://127.0.0.1:9222'
-  headless: false
-```
+- **输入**：只接受 `http(s)` URL；网页内容一律视为不可信数据，不作为指令执行。
+- **eval**：默认关闭；开启需要配置 `allowEval: true` 并在任务中显式说明。
+- **产物**：默认只能写入 `artifactDir`；绝对路径越界会被拒绝。
+- **登录态**：独立 profile；不默认连接用户日常浏览器，复用需显式 CDP。
+- **不做的事**：没有 stealth 反检测、没有验证码识别 / 绕过、没有自动提交 / 自动交卷、没有隐藏式批量抓取绕过站点限速。
+- **高风险操作**（下载、上传、跨站写操作）应在任务说明中由人确认。
 
-3. 重新加载插件后调用 `browser_open`。CDP 模式下 `browser_close` 只断开连接，不关闭你已有的标签页。
-
-## 设计要点
-
-- **快照引用而不是 CSS/坐标**：每次快照重建 `data-dsh-ref`；动作只接受 `@eN`，引用过期会明确报错并要求重新快照。
-- **跨 frame**：主文档和同源/跨域 iframe 分别快照；用 `data-dsh-frame` 链定位，`browser_act` 可直接操作 iframe 内的引用。
-- **登录态是资产**：`userDataDir` 持久化；浏览器空闲关闭也不丢 Cookie。
-- **批处理不抢当前页**：`browser_collect` 用后台标签页，共享同一 context 的 Cookie，默认并发 2 + 延迟。
-- **证据链**：截图保存绝对路径；提取超长时保留完整文件并返回 `savedPath`；网络捕获保留接口原始响应。
-- **不绕过验证**：没有 stealth 插件、验证码识别或风控绕过。遇到验证码/登录时，工具把窗口留在前台，由用户完成。
+详见 [`SECURITY.md`](SECURITY.md)。
 
 ## 已知限制
 
-- 依赖本机 Edge/Chromium；没有浏览器时 `browser_open` 会报错并给出安装/`executablePath` 提示。
-- 同一 `userDataDir` 不能被两个浏览器进程同时占用。上一个进程没退干净时，关闭它或换 profile。
-- 站点可能对自动化访问返回 403/405/WAF 页面。工具会把“访问被阻断/安全威胁”标进快照提示，但不会绕过。
-- Canvas、封闭 Shadow DOM、纯视觉内容无法可靠快照；用截图 + 人工判断兜底。
-- `browser_download` 直接 URL 模式走 `context.request`，与页面内 JS 触发的下载在少数站点上行为不同；优先点击元素模式。
+- 依赖本机 Edge / Chromium；没有浏览器时 `browser_open` 会报错并提示安装或设置 `executablePath`。
+- 同一 `userDataDir` 不能被两个浏览器进程同时占用。
+- 部分站点严格检测 headless，需 `offscreen` 或 `window` 兜底，仍可能遇到 WAF。
+- Canvas、封闭 Shadow DOM、纯视觉内容无法可靠结构化，用截图与网络兜底。
+- 多个子代理共享同一 Chromium context，标签页与内存需要上限和回收。
+- Windows 下 `offscreen` 窗口仍可能出现在任务栏；默认用 `headless`。
+- 0.2.0 的部分模块仍在实现中，接口以 [`docs/MODULE-CONTRACT.md`](docs/MODULE-CONTRACT.md) 为准。
 
-## 验证
+## 验证命令
 
-- `test/smoke.mjs`：Edge + example.com，打开、快照、提取、整页截图。
-- 实机验证：`browser_open`、`browser_extract`（labeled）、`browser_screenshot`、`browser_download` 直接 URL 模式均通过。
-- `test/deep.mjs`：本地 HTTP 页面，23 项断言覆盖 ref 点击、填表、iframe、表格、labeled/structured、network、截图、标签页、弹出标签、批量采集。
-- `test/qcc.mjs` / `test/qcc-detail.mjs`：企查查首页与公开公司详情页的真实读取（详见项目根目录 `docs/企查查工作流.md`）。
-
-运行测试（需要能启动本机浏览器）：
+Windows PowerShell 与本机 Node 路径：
 
 ```powershell
-node .\test\deep.mjs
+$node = 'C:\Users\生升\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\node\bin\node.exe'
+
+# 语法检查
+& $node --check .\index.js
+Get-ChildItem .\lib, .\test -Filter *.js -Recurse | ForEach-Object { & $node --check $_.FullName }
+Get-ChildItem .\test -Filter *.mjs -Recurse | ForEach-Object { & $node --check $_.FullName }
+
+# 无浏览器单测（存在即运行）
+if (Test-Path .\test\unit.mjs) { & $node .\test\unit.mjs }
+
+# 需要本机 Edge 的实机测试（不在 CI 中运行）
+if (Test-Path .\test\deep.mjs) { & $node .\test\deep.mjs }
 ```
 
-测试会在插件目录的 `runtime/` 下创建临时 profile 和截图；这些目录不参与发布，安装前可删除。
+CI 只做语法检查与无浏览器单测，见 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)。
+
+## 开源许可
+
+[MIT](LICENSE) © 2026 DSH Browser Tool contributors
