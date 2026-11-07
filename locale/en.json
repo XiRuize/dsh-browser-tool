@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Browser Operations",
+    "description": "Give agents a real browser with persistent login: snapshot refs, clicking, forms, text/table extraction, evidence screenshots, network capture, and batch collection."
+  }
+}
