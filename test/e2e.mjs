@@ -161,7 +161,12 @@ try {
   const clicked = await call('browser_act', { action: 'click', selector: '#go', tab: mainTab })
   check(clicked.snapshot?.text.includes('查询:阿里巴巴'), 'act click 更新页面')
   const selected = await call('browser_act', { action: 'select', selector: '#sel', value: 'b', tab: mainTab })
-  check(selected.verify?.ok === true && selected.verify?.selected?.includes('b'), 'act select 回读选中项')
+  check(
+    selected.verify?.ok === true &&
+      selected.verify?.value === 'b' &&
+      JSON.stringify(selected.verify?.selected) === JSON.stringify(['选项B']),
+    'act select 回读 value 与 label',
+  )
   const checked = await call('browser_act', { action: 'check', selector: '#agree', tab: mainTab })
   check(checked.verify?.ok === true && checked.verify?.checked === true, 'act check 回读 checked')
 
@@ -181,8 +186,10 @@ try {
     tab: mainTab,
   })
   check(
-    containerSelect.verify?.ok === true && containerSelect.verify?.selected?.includes('b2'),
-    'container 限定重复选项 select',
+    containerSelect.verify?.ok === true &&
+      containerSelect.verify?.value === 'b2' &&
+      JSON.stringify(containerSelect.verify?.selected) === JSON.stringify(['选项B2']),
+    'container 限定重复选项 select（value + label）',
   )
 
   step = 'browser_screenshot'
