@@ -24,6 +24,8 @@ DSH 的 `browserUse` 服务契约较窄，不同浏览器 provider 的功能差�
 
 ### 建议
 
+> 当前实现已按「可选注册 + 降级」落地：`index.js` 在 `ctx.get('browserUse')` 存在且提供 `register` 时 best-effort 注册；缺失或失败只记 warning，不影响工具。下面的伪代码是提案中的通用形态。
+
 采用**可选注册 + 降级**：
 
 ```js

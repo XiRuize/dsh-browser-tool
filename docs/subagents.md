@@ -2,7 +2,7 @@
 
 本文给**主代理**看：如何用 `browser_workspace` 把一次浏览器调研拆给多个子代理，并避免他们互相踩脚。
 
-> 前提：`browser_workspace` 与 per-tab 锁处于 **0.2.0 实现中**。在它们合入前，子代理仍可共用 `tab`，但没有角色隔离，主代理需要在提示词里硬性约定分工。
+> 前提：`browser_workspace` 与 per-tab 锁已实现（真实 Edge 多代理 E2E 仍待 install-verify）。子代理应使用工作区与角色隔离；若运行环境暂未安装该 bundle，则至少用 `tab` 显式分工并在提示词里硬性约定。
 
 ## 为什么要工作区
 

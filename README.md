@@ -1,12 +1,12 @@
-# @future/dsh-browser-tool
+﻿# @future/dsh-browser-tool
 
 给 [DeepSeek Harness](https://github.com/deepseek-ai) 的浏览器操作插件：一个可长期驻留、默认后台静默的真实 Edge / Chromium 浏览器，加上面向「浏览 → 定位 → 提取 → 存证 → 批处理」的工具面。
 
-![status](https://img.shields.io/badge/status-0.2.0%20in%20progress-yellow)
+![status](https://img.shields.io/badge/status-0.2.0%20code%20ready%2C%20E2E%20pending-yellow)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![runtime](https://img.shields.io/badge/runtime-Node.js%2020%2B%20%7C%2022-339933)
 
-> **版本状态**：`0.2.0` 仍在实现中。本文档按 v0.2 的模块契约（[`docs/MODULE-CONTRACT.md`](docs/MODULE-CONTRACT.md)）描述目标行为，标注「0.2.0 实现中」的能力可能尚未全部合入当前源码。已交付的基线是 `0.1.0`（详见 [`CHANGELOG.md`](CHANGELOG.md)）。本仓库尚未发布到 GitHub，也没有在 CI 上跑过实机验收。
+> **版本状态**：`0.2.0` 的代码已落地（14 个工具、分层观测、工作区与恢复），但**真实 Edge 端到端验收仍待 install-verify 完成**，本仓库也尚未发布到 GitHub。已交付的基线是 `0.1.0`（详见 [`CHANGELOG.md`](CHANGELOG.md)）。
 
 ## 定位
 
@@ -143,20 +143,22 @@ C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
 
 | 工具 | 用途 | 状态 |
 |---|---|---|
-| `browser_open` | 打开 / 复用标签页，返回快照 | 0.1.0 已有 |
-| `browser_snapshot` | 可操作快照（带 `@eN`），`browser_observe` 的兼容别名 | 0.1.0 已有 |
-| `browser_observe` | 按层观测：structure / text / visual / network / console / meta | 0.2.0 实现中 |
-| `browser_inspect` | DOM / HTML / CSS / a11y / 资源 / 存储 / 性能 / eval | 0.2.0 实现中 |
-| `browser_act` | click / type / press / scroll / select / check / hover / drag / upload / back / forward / reload / wait / waitFor | 0.1.0 已有，v0.2 扩展 |
-| `browser_extract` | text / html / links / tables / labeled / structured / markdown / images / forms | 0.1.0 已有，v0.2 扩展 |
-| `browser_screenshot` | 页面 / 元素 / 整页截图 | 0.1.0 已有 |
-| `browser_tabs` | list / switch / close / claim / release | 0.1.0 已有，v0.2 扩展 |
-| `browser_workspace` | create / join / status / grant / handoff / close | 0.2.0 实现中 |
-| `browser_network` | start / stop / list / get / export(HAR) | 0.1.0 已有，v0.2 扩展 |
-| `browser_collect` | 游标 + checkpoint 的可续跑批处理 | 0.1.0 已有，v0.2 扩展 |
-| `browser_download` | 按 URL 下载（共享 cookie）或点击元素下载 | 0.1.0 已有 |
-| `browser_status` | 浏览器 / 标签页 / 锁 / 工作区 / 最近错误诊断 | 0.2.0 实现中 |
-| `browser_close` | 关闭浏览器、释放目录锁，保留登录态 | 0.1.0 已有 |
+| `browser_open` | 打开 / 复用标签页，静默返回快照；`focus` 默认 false | 已实现 |
+| `browser_snapshot` | 可操作结构快照（带 `@eN`），是 `browser_observe` 的 **structure 层兼容别名** | 已实现 |
+| `browser_observe` | 按层观测：structure / text / visual / network / console / meta | 已实现 |
+| `browser_inspect` | DOM / HTML / CSS / a11y / 资源 / 存储 / 性能 / eval | 已实现 |
+| `browser_act` | click / type / press / scroll / select / check / hover / drag / upload / back / forward / reload / wait / waitFor / dialog；默认回读核验 | 已实现 |
+| `browser_extract` | text / html / links / tables / labeled / structured / markdown / images / forms | 已实现 |
+| `browser_screenshot` | 页面 / 元素 / 整页截图 | 已实现 |
+| `browser_tabs` | list / switch / close / claim / release | 已实现 |
+| `browser_workspace` | create / join / status / grant / handoff / close；status 只报告当前活动工作区 | 已实现 |
+| `browser_network` | start / stop / list / get / clear / export(HAR) | 已实现 |
+| `browser_collect` | urls 最多 100、单次处理 20 的游标 + checkpoint 可续跑批处理 | 已实现 |
+| `browser_download` | 按 URL 下载（共享 cookie）或点击元素下载 | 已实现 |
+| `browser_status` | 扁平诊断对象：浏览器 / 标签页 / 锁 / 工作区 / 最近错误 | 已实现 |
+| `browser_close` | 关闭浏览器、释放目录锁，保留登录态 | 已实现 |
+
+> 以上为代码已实现。真实 Edge 的端到端验收（headless、恢复、多代理、续跑）仍待 install-verify 在 [`docs/install-verification.md`](docs/install-verification.md) 记录结果；本文不把「已实现」写成「已验收」。
 
 ## 仓库结构
 
@@ -169,18 +171,17 @@ browser-tool/
 │  ├─ config.js             # 配置归一化（v0.2 默认值）
 │  ├─ host.js               # 浏览器启动 / 静默 / watchdog / 恢复
 │  ├─ manager.js            # 管理器门面：页面、工作区、锁
-│  ├─ pages.js              # 标签页与 owner（0.2.0 实现中）
-│  ├─ workspace.js          # 工作区 / 租约 / ACL（0.2.0 实现中）
-│  ├─ locks.js              # per-tab 读写锁（0.2.0 实现中）
+│  ├─ pages.js              # 标签页与 owner
+│  ├─ workspace.js          # 工作区 / 租约 / ACL
+│  ├─ locks.js              # per-tab 读写锁
 │  ├─ snapshot.js           # 快照与引用
-│  ├─ observe.js            # 分层观测（0.2.0 实现中）
-│  ├─ inspect.js            # 深层前端检查（0.2.0 实现中）
-│  ├─ artifacts.js          # 产物库与 manifest（0.2.0 实现中）
-│  ├─ console.js            # console 环形记录（0.2.0 实现中）
-│  ├─ act.js                # 动作与回读核验（0.2.0 实现中）
+│  ├─ observe.js            # 分层观测
+│  ├─ inspect.js            # 深层前端检查
+│  ├─ artifacts.js          # 产物库与 manifest
+│  ├─ act.js                # 动作与回读核验
 │  ├─ extract.js            # 提取
 │  ├─ network.js            # 网络捕获
-│  ├─ collect.js            # 可续跑批处理（0.2.0 实现中）
+│  ├─ collect.js            # 可续跑批处理
 │  ├─ tools.js              # 工具注册
 │  └─ util.js               # 工具函数
 ├─ docs/
@@ -194,7 +195,7 @@ browser-tool/
 │  └─ install-verification.md # 安装验收记录（模板）
 ├─ skills/
 │  └─ browser-field-ops/    # Agent Skill：浏览器分段协作流程
-├─ test/                    # smoke / deep / live-server / qcc；unit、e2e 0.2.0 实现中
+├─ test/                    # smoke / deep / live-server / qcc；unit、e2e 待 tests-verify
 ├─ .github/                 # CI 与 issue / PR 模板
 ├─ LICENSE
 ├─ SECURITY.md
@@ -221,7 +222,7 @@ browser-tool/
 - Canvas、封闭 Shadow DOM、纯视觉内容无法可靠结构化，用截图与网络兜底。
 - 多个子代理共享同一 Chromium context，标签页与内存需要上限和回收。
 - Windows 下 `offscreen` 窗口仍可能出现在任务栏；默认用 `headless`。
-- 0.2.0 的部分模块仍在实现中，接口以 [`docs/MODULE-CONTRACT.md`](docs/MODULE-CONTRACT.md) 为准。
+- 0.2.0 的代码已落地，但真实 Edge E2E（headless、恢复、多代理、续跑）仍待 install-verify 验收；接口以 [`docs/MODULE-CONTRACT.md`](docs/MODULE-CONTRACT.md) 为准。
 
 ## 验证命令
 
@@ -242,7 +243,7 @@ if (Test-Path .\test\unit.mjs) { & $node .\test\unit.mjs }
 if (Test-Path .\test\deep.mjs) { & $node .\test\deep.mjs }
 ```
 
-CI 只做语法检查与无浏览器单测，见 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)。
+CI 只做语法检查与无浏览器单测，见 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)。真实 Edge 的验收命令与结果表见 [`docs/install-verification.md`](docs/install-verification.md)（当前为待填模板，尚未验收）。
 
 ## 开源许可
 

@@ -1,6 +1,6 @@
 # 架构（architecture）
 
-本文描述 `@future/dsh-browser-tool` v0.2 的目标架构。标注「0.2.0 实现中」的模块按 [`MODULE-CONTRACT.md`](MODULE-CONTRACT.md) 的接口推进，当前源码可能仍是旧实现。
+本文描述 `@future/dsh-browser-tool` v0.2 的架构。代码已落地；真实 Edge 端到端验收仍待 install-verify（见 [`install-verification.md`](install-verification.md)）。
 
 ## 设计原则
 
@@ -68,16 +68,16 @@ flowchart LR
 |---|---|---|
 | Host | 浏览器进程、可见性、断线恢复、watchdog、CDP | `lib/host.js` |
 | Manager | 对工具面暴露的稳定门面：页面解析、工作区、锁、状态 | `lib/manager.js` |
-| Workspace | 工作区成员、角色、租约、handoff | `lib/workspace.js`（0.2.0 实现中） |
-| Pages | 稳定 `tabId`、owner、活跃页、上限与回收 | `lib/pages.js`（0.2.0 实现中） |
-| Locks | 同页写串行、跨页并行、等待超时 | `lib/locks.js`（0.2.0 实现中） |
+| Workspace | 工作区成员、角色、租约、handoff | `lib/workspace.js` |
+| Pages | 稳定 `tabId`、owner、活跃页、上限与回收 | `lib/pages.js` |
+| Locks | 同页写串行、跨页并行、等待超时 | `lib/locks.js` |
 | Observe | `structure` / `text` / `visual` / `network` / `console` / `meta` 分层观测 | `lib/observe.js`、`lib/snapshot.js` |
-| Inspect | DOM / HTML / CSS / a11y / box / resources / scripts / storage / console / performance / eval | `lib/inspect.js`（0.2.0 实现中） |
-| Act | 动作执行、回读核验、`@eN` / selector / container / nth | `lib/act.js`（0.2.0 实现中） |
+| Inspect | DOM / HTML / CSS / a11y / box / resources / scripts / storage / console / performance / eval | `lib/inspect.js` |
+| Act | 动作执行、回读核验、`@eN` / selector / container / nth | `lib/act.js` |
 | Extract | text / html / links / tables / labeled / structured / markdown / images / forms | `lib/extract.js` |
 | Network | 请求/响应环形缓冲、HAR 导出 | `lib/network.js` |
-| Collect | cursor + checkpoint 的可续跑批处理 | `lib/collect.js`（0.2.0 实现中） |
-| Artifacts | 产物路径约束、manifest JSONL、哈希 | `lib/artifacts.js`（0.2.0 实现中） |
+| Collect | cursor + checkpoint 的可续跑批处理 | `lib/collect.js` |
+| Artifacts | 产物路径约束、manifest JSONL、哈希 | `lib/artifacts.js` |
 | Tools | JSON Schema、`isConcurrencySafe`、render、错误提示 | `lib/tools.js` |
 
 ## 启动与生命周期
@@ -186,5 +186,5 @@ flowchart TD
 
 - 旧工具名与参数保持；新增能力通过可选参数扩展。
 - `@eN` 引用语义不变：每个快照重建引用，旧引用失效并明确报错。
-- `browser_snapshot` 保留为 `browser_observe` 的兼容别名。
+- `browser_snapshot` 保留为 `browser_observe` 的 **structure 层**兼容别名。
 - Node.js 20+；无 native 依赖；Windows / macOS / Linux。

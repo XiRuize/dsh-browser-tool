@@ -1,12 +1,12 @@
-# @future/dsh-browser-tool
+﻿# @future/dsh-browser-tool
 
 Browser-operation plugin for [DeepSeek Harness](https://github.com/deepseek-ai): a long-lived, silent-by-default real Edge / Chromium browser plus a tool surface for *observe → locate → act → verify → extract → archive*.
 
-![status](https://img.shields.io/badge/status-0.2.0%20in%20progress-yellow)
+![status](https://img.shields.io/badge/status-0.2.0%20code%20ready%2C%20E2E%20pending-yellow)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![runtime](https://img.shields.io/badge/runtime-Node.js%2020%2B%20%7C%2022-339933)
 
-> **Status**: `0.2.0` is still under implementation. This document describes the target behaviour defined by [`docs/MODULE-CONTRACT.md`](docs/MODULE-CONTRACT.md); features marked "0.2.0 in progress" may not yet be merged into the current source. `0.1.0` is the delivered baseline. This repository has not been published to GitHub and has not passed real-browser acceptance in CI.
+> **Status**: the `0.2.0` code is in place (14 tools, layered observation, workspaces, recovery), but **real Edge end-to-end acceptance is still pending install-verify**, and this repository has not been published to GitHub. `0.1.0` is the delivered baseline.
 
 ## What it is
 
@@ -52,7 +52,9 @@ The plugin exports no `Config` / `ConfigSchema`; the Loader passes raw config to
 
 ## Tools
 
-`browser_open`, `browser_snapshot` (compatibility alias of `browser_observe`), `browser_observe`, `browser_inspect`, `browser_act`, `browser_extract`, `browser_screenshot`, `browser_tabs`, `browser_workspace`, `browser_network`, `browser_collect`, `browser_download`, `browser_status`, `browser_close`.
+`browser_open`, `browser_snapshot` (**structure-layer compatibility alias** of `browser_observe`), `browser_observe`, `browser_inspect`, `browser_act`, `browser_extract`, `browser_screenshot`, `browser_tabs`, `browser_workspace`, `browser_network`, `browser_collect`, `browser_download`, `browser_status`, `browser_close`.
+
+All 14 tools are implemented in code. Real Edge end-to-end acceptance remains pending install-verify — see [`docs/install-verification.md`](docs/install-verification.md).
 
 Full parameter tables and return shapes: [`docs/tools.md`](docs/tools.md).
 
@@ -75,7 +77,7 @@ $node = 'C:\Users\生升\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\node
 if (Test-Path .\test\unit.mjs) { & $node .\test\unit.mjs }
 ```
 
-CI runs syntax checks and browser-free unit tests only (`.github/workflows/ci.yml`).
+CI runs syntax checks and browser-free unit tests only (`.github/workflows/ci.yml`). Real-browser acceptance commands and the result table live in [`docs/install-verification.md`](docs/install-verification.md) and are still a pending template.
 
 ## License
 
