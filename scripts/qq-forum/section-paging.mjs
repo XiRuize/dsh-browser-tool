@@ -1,7 +1,7 @@
-import { BrowserManager } from '../lib/manager.js'
-import { resolveConfig } from '../lib/config.js'
-import { fastFetch } from '../lib/fetch.js'
-import { parseFeedApi } from '../lib/adapters/qq-forum.js'
+import { BrowserManager } from '../../lib/manager.js'
+import { resolveConfig } from '../../lib/config.js'
+import { fastFetch } from '../../lib/fetch.js'
+import { parseFeedApi } from '../../lib/adapters/qq-forum.js'
 
 const profile = process.env.DSH_BROWSER_PROFILE || path.join(os.homedir(), '.dsh', 'browser-tool', 'profile')
 const artifact = process.env.DSH_BROWSER_ARTIFACTS || path.join(os.homedir(), '.dsh', 'browser-tool', 'artifacts')

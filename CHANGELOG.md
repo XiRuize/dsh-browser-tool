@@ -2,6 +2,19 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。本文件只记录真实发生或明确标记为「进行中」的变更，不把计划写成已发布事实。
 
+## [未发布] — 0.6.0（暂存区 + 工作页池，代码已落地）
+
+### 新增
+
+- **临时暂存区** `lib/scratch.js`：原始 HTML/正文先落盘到 `~/.dsh/browser-tool/scratch/<jobId>/`，清洗后再返回；默认采集结束即删（`keepScratch` 可保留），按 TTL/容量自动清理。
+- **流式清洗** `lib/clean.js`：`cleanHtml` 去脚本/样式/注释、解实体、折叠空白；`cleanText` 归一纯文本；`streamClean` 按块切分，避免整页进入上下文。
+- **`browser_capture`**：F12 式抓取当前页（或 selector 范围）→ 写入暂存区 → 清洗 → 返回标题/正文 → 默认删除中间文件。
+- **`browser_scratch`**：stats / list / read / clear 管理暂存区。
+- **`browser_collect` 新参数**：`scratch`、`keepScratch`、`clean`。
+
+### 修复
+
+- **多 URL 反复开关标签页**：新增 manager 工作页池（`acquireWorkerPage` / `releaseWorkerPage`），采集跨调用复用同一批页面，不再每条 URL 建页/关页，显著减少 about:blank 堆积；`close()` 统一回收。
 ## [未发布] — 0.5.0（QQ 论坛分页算法，代码已落地）
 
 ### 新增

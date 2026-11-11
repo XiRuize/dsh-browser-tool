@@ -242,6 +242,20 @@ try {
     'collect render=false 走 HTTP 快通道',
   )
 
+  const scratchCollect = await call('browser_collect', {
+    urls: [`${base}/detail?s=1`, `${base}/detail?s=2`],
+    mode: 'text',
+    render: false,
+    scratch: true,
+    save: false,
+    jobId: 'e2e-scratch',
+  })
+  check(Boolean(scratchCollect.scratchJobId), 'collect scratch 返回 scratchJobId')
+  check(scratchCollect.scratchCleared === true, 'collect scratch 结束后自动清理')
+  check(scratchCollect.succeeded === 2, 'collect scratch 采集成功')
+  const scratchStats = await call('browser_scratch', { action: 'stats' })
+  check(Array.isArray(scratchStats.jobs), 'browser_scratch stats 返回任务列表')
+
   step = 'browser_collect cursor 续跑（120 URL）'
   const collectUrls = Array.from({ length: 120 }, (_, index) => `${base}/detail?n=${index + 1}`)
   const collectArgs = {

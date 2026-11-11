@@ -2,9 +2,9 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
-import { BrowserManager } from '../lib/manager.js'
-import { collectQqForum } from '../lib/adapters/qq-forum.js'
-import { resolveConfig } from '../lib/config.js'
+import { BrowserManager } from '../../lib/manager.js'
+import { collectQqForum } from '../../lib/adapters/qq-forum.js'
+import { resolveConfig } from '../../lib/config.js'
 
 const profile = process.env.DSH_BROWSER_PROFILE || path.join(os.homedir(), '.dsh', 'browser-tool', 'profile')
 const artifact = process.env.DSH_BROWSER_ARTIFACTS || path.join(os.homedir(), '.dsh', 'browser-tool', 'artifacts')

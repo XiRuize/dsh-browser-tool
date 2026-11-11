@@ -14,6 +14,8 @@ import { parseLabeledText, cleanLabeledValue } from '../lib/extract.js'
 import { NetworkRecorder } from '../lib/network.js'
 import { parseSsrPosts, parseFeedApi, tinyIdOfFeed, bknFromSkey } from '../lib/adapters/qq-forum.js'
 import { collectUrls } from '../lib/collect.js'
+import { cleanHtml, cleanText, extractTitle } from '../lib/clean.js'
+import { ScratchStore } from '../lib/scratch.js'
 import { registerBrowserTools } from '../lib/tools.js'
 import { BrowserManager } from '../lib/manager.js'
 
@@ -688,6 +690,38 @@ test('qq-forum 适配器：bkn、SSR 解析、tiny_id 反解与 API 归一', () 
 })
 
 // ---------------------------------------------------------------------------
+// clean.js / scratch.js
+// ---------------------------------------------------------------------------
+
+test('cleanHtml 去脚本样式、解实体、折叠空白', () => {
+  const html = `<html><head><title>测试 标题</title><style>.a{color:red}</style></head>
+    <body><script>alert(1)</script><h1>标题</h1><p>第一段 &amp; 第二段</p><div>尾巴</div></body></html>`
+  const text = cleanHtml(html)
+  assert.equal(extractTitle(html), '测试 标题')
+  assert.ok(!text.includes('alert(1)'))
+  assert.ok(!text.includes('color:red'))
+  assert.ok(text.includes('标题'))
+  assert.ok(text.includes('第一段 & 第二段'))
+  assert.equal(cleanText('a\n\n\n b'), 'a\n\nb')
+  assert.equal(cleanHtml('<p>abcdefgh</p>', { maxChars: 5 }).endsWith('…(已截断)'), true)
+})
+
+test('ScratchStore 写入/列出/读取/清理与越界拒绝', async () => {
+  const dir = path.join(tmpRoot, 'scratch')
+  const store = new ScratchStore({ dir, ttlMs: 60000 })
+  const jobId = ScratchStore.jobId('unit')
+  const written = await store.put(jobId, 'page', '<p>hello</p>')
+  assert.ok(written.bytes > 0 && written.path.startsWith(dir))
+  const files = await store.list(jobId)
+  assert.equal(files.length, 1)
+  assert.equal(await store.read(written.path), '<p>hello</p>')
+  await assert.rejects(() => store.read(path.join(tmpRoot, 'outside.txt')), /拒绝读取/)
+  const stats = await store.stats()
+  assert.ok(stats.jobs.some(job => job.jobId === jobId))
+  await store.clear(jobId)
+  assert.equal((await store.list(jobId)).length, 0)
+})
+// ---------------------------------------------------------------------------
 // collect.js
 // ---------------------------------------------------------------------------
 
@@ -819,7 +853,7 @@ test('collectUrls deadline 到达时优雅返回 nextCursor 并保存 checkpoint
 // tools.js 工具面
 // ---------------------------------------------------------------------------
 
-test('tools.js 注册 17 个工具、schema 合法、并发安全分类与旧参数键齐全', () => {
+test('tools.js 注册 19 个工具、schema 合法、并发安全分类与旧参数键齐全', () => {
   const config = resolveConfig({ artifactDir: path.join(tmpRoot, 'tools-artifacts') })
   const tools = new Map()
   const fakeCtx = {
@@ -848,12 +882,14 @@ test('tools.js 注册 17 个工具、schema 合法、并发安全分类与旧参
     'browser_fetch',
     'browser_forum',
     'browser_show',
+    'browser_scratch',
+    'browser_capture',
     'browser_collect',
     'browser_download',
     'browser_close',
     'browser_status',
   ]
-  assert.equal(tools.size, 17)
+  assert.equal(tools.size, 19)
   assert.deepEqual([...tools.keys()].sort(), expectedNames.slice().sort())
 
   for (const [name, tool] of tools) {
@@ -886,6 +922,8 @@ test('tools.js 注册 17 个工具、schema 合法、并发安全分类与旧参
     browser_fetch: ['url', 'method', 'headers', 'body', 'timeoutMs', 'retries', 'maxChars', 'save'],
     browser_forum: ['guild', 'limit', 'keywords', 'discover', 'sections', 'api', 'save'],
     browser_show: ['action', 'visibility', 'tab', 'restoreTabs'],
+    browser_scratch: ['action', 'jobId', 'path', 'maxChars'],
+    browser_capture: ['tab', 'selector', 'keep', 'maxChars'],
     browser_download: ['tab', 'url', 'ref', 'selector', 'path'],
   }
   for (const [name, keys] of Object.entries(oldKeys)) {
@@ -903,6 +941,8 @@ test('tools.js 注册 17 个工具、schema 合法、并发安全分类与旧参
     ['browser_fetch', {}, true],
     ['browser_forum', {}, true],
     ['browser_show', {}, true],
+    ['browser_scratch', {}, true],
+    ['browser_capture', {}, true],
     ['browser_screenshot', {}, true],
     ['browser_status', {}, true],
     ['browser_open', {}, false],

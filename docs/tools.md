@@ -430,6 +430,9 @@ eval 默认关闭（allowEval=false）。如确需执行，请在 cordis.patch.y
 | `deadlineMs` | integer | `120000` | 单次调用时限，到时保存检查点并返回 |
 | `layers` | string[] | 无 | 每个 URL 额外留下的层：`text` / `structure` / `visual` / `network` |
 | `checkpointPath` | string | 自动 | 检查点路径；省略时按 jobId 放到 artifacts |
+| `scratch` | boolean | `false` | 原始内容写入暂存区再清洗 |
+| `keepScratch` | boolean | `false` | 采集后保留暂存文件 |
+| `clean` | boolean | `true` | 是否对暂存原始内容做文本清洗 |
 
 返回：
 
@@ -519,6 +522,31 @@ HTTP 快通道：复用当前浏览器上下文的 Cookie / UA / Referer 直接�
 说明：`set` 会重启浏览器上下文以切换有头/无头（Cookie 与登录态保留在 userDataDir）；
 `show`/`hide` 只在 `offscreen`/`window` 下有效，通过 CDP 移动窗口位置，不重启。
 运行时切换不会写回配置，重启 DSH 后仍按配置里的 `visibility` 启动。
+---
+
+## `browser_capture`
+
+F12 式抓取：当前页面（或 `selector` 范围）的原始 HTML 写入临时暂存区，立即清洗并返回正文；默认抓完即删。
+
+| 参数 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `tab` | string | 当前页 | 目标标签页 |
+| `selector` | string | — | 只抓某个容器 |
+| `keep` | boolean | `false` | 保留暂存文件（可用 `browser_scratch read` 读取） |
+| `maxChars` | integer | `20000` | 清洗后返回上限 |
+
+返回 `{ jobId, path, bytes, title, chars, text, cleared }`。
+
+---
+
+## `browser_scratch`
+
+| 参数 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `action` | string | `stats` | `stats` / `list` / `read` / `clear` |
+| `jobId` | string | — | 暂存任务 ID（`list` / `clear` 必填） |
+| `path` | string | — | `read` 的文件路径（必须在暂存区内） |
+| `maxChars` | integer | `20000` | `read` 返回上限 |
 ---
 
 ## `browser_download`

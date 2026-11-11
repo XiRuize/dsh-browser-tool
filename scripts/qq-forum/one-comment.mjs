@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 
-import { BrowserManager } from '../lib/manager.js'
-import { resolveConfig } from '../lib/config.js'
+import { BrowserManager } from '../../lib/manager.js'
+import { resolveConfig } from '../../lib/config.js'
 
 const base = 'C:/Users/生升/Documents/deepseek-harness/default-workspace/qq_forum/five'
 const profile = 'C:/Users/生升/.dsh/browser-tool/profile'

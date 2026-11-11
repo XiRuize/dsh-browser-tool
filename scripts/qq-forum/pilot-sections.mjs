@@ -1,31 +1,26 @@
 import fs from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
 
-import { BrowserManager } from '../lib/manager.js'
-import { resolveConfig } from '../lib/config.js'
-import { fastFetch } from '../lib/fetch.js'
-import { parseFeedApi } from '../lib/adapters/qq-forum.js'
+import { BrowserManager } from '../../lib/manager.js'
+import { resolveConfig } from '../../lib/config.js'
+import { fastFetch } from '../../lib/fetch.js'
+import { parseFeedApi } from '../../lib/adapters/qq-forum.js'
 
-const profile = 'C:/Users/生升/.dsh/browser-tool/profile'
-const artifact = 'C:/Users/生升/.dsh/browser-tool/artifacts'
-const outDir = process.argv[2] || 'C:/Users/生升/Documents/deepseek-harness/default-workspace/qq_forum/five'
-const limit = Number(process.argv[3] || 150)
-const concurrency = Number(process.argv[4] || 4)
-const bkn = String(process.argv[5] || '1276245135')
-
-// 需求/供给密度最高的五个栏目
+const profile = process.env.DSH_BROWSER_PROFILE || path.join(os.homedir(), '.dsh', 'browser-tool', 'profile')
+const artifact = process.env.DSH_BROWSER_ARTIFACTS || path.join(os.homedir(), '.dsh', 'browser-tool', 'artifacts')
+const outDir = process.argv[2] || path.join(process.cwd(), 'test-output', 'pilot')
+const limit = Number(process.argv[3] || 100)
 const sections = [
   { name: '二手', subc: '38984169' },
   { name: '光华', subc: '714966807' },
   { name: '柳林', subc: '654210383' },
-  { name: '选课', subc: '741041212' },
-  { name: '全部', subc: '634804985' },
 ]
 
 const config = resolveConfig({ userDataDir: profile, artifactDir: artifact, visibility: 'headless' })
 const manager = new BrowserManager(config)
 const endpoint =
-  'https://pd.qq.com/qunng/guild/gotrpc/auth/trpc.qchannel.commreader.ComReader/GetChannelTimelineFeeds?bkn=' + bkn
+  'https://pd.qq.com/qunng/guild/gotrpc/auth/trpc.qchannel.commreader.ComReader/GetChannelTimelineFeeds?bkn=680009538'
 
 async function collectSection(section) {
   const startedAt = Date.now()
@@ -43,7 +38,7 @@ async function collectSection(section) {
   let finish = false
   let requests = 0
 
-  while (posts.length < limit && !finish && pageNum <= 40) {
+  while (posts.length < limit && !finish && pageNum <= 30) {
     const body = {
       count: 10,
       from: 7,
@@ -79,8 +74,8 @@ async function collectSection(section) {
     pageNum = m ? Number(m[1]) : pageNum + 1
     attach = next || attach
     if (added === 0 && (!next || finish)) break
-    if (added === 0 && pageNum > 12) break
   }
+
   return {
     section: section.name,
     subc: section.subc,
@@ -100,14 +95,10 @@ try {
   async function worker() {
     while (queue.length > 0) {
       const section = queue.shift()
-      try {
-        results.push(await collectSection(section))
-      } catch (error) {
-        console.error('failed', section.name, error?.message)
-      }
+      results.push(await collectSection(section))
     }
   }
-  await Promise.all(Array.from({ length: Math.min(concurrency, sections.length) }, () => worker()))
+  await Promise.all(Array.from({ length: Math.min(3, sections.length) }, () => worker()))
 } finally {
   await manager.dispose().catch(() => {})
 }
@@ -122,4 +113,5 @@ for (const result of results) {
   )
 }
 await fs.writeFile(path.join(outDir, 'summary.json'), JSON.stringify(summary, null, 2), 'utf8')
-console.log(JSON.stringify({ wallMs: Date.now() - startedAt, total: results.reduce((s, r) => s + r.got, 0), sections: summary }, null, 2))
+
+console.log(JSON.stringify({ wallMs: Date.now() - startedAt, total: results.reduce((sum, r) => sum + r.got, 0), sections: summary }, null, 2))

@@ -6,7 +6,7 @@
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![runtime](https://img.shields.io/badge/runtime-Node.js%2020%2B%20%7C%2022-339933)
 
-> **版本状态**：`0.3.0` 的代码已落地（17 个工具、分层观测、工作区与恢复），但**真实 Edge 端到端验收仍待 install-verify 完成**，本仓库也尚未发布到 GitHub。已交付的基线是 `0.1.0`（详见 [`CHANGELOG.md`](CHANGELOG.md)）。
+> **版本状态**：`0.3.0` 的代码已落地（19 个工具、分层观测、工作区与恢复），但**真实 Edge 端到端验收仍待 install-verify 完成**，本仓库也尚未发布到 GitHub。已交付的基线是 `0.1.0`（详见 [`CHANGELOG.md`](CHANGELOG.md)）。
 
 ## 定位
 
@@ -162,6 +162,8 @@ C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
 | `browser_fetch` | HTTP 快通道：复用登录 Cookie/UA 直连，不渲染；命中风控标记 blocked | 已实现 |
 | `browser_collect` | urls 最多 200、单次处理 100；页面复用 + 并发 8 + JSONL 增量检查点；`render=false` 走快通道 | 已实现 |
 | `browser_show` | 静默/非静默切换：headless / offscreen / window，show 拉到前台、hide 移出屏幕 | 已实现 |
+| `browser_capture` | F12 式抓页面 HTML 到暂存区 → 清洗 → 返回（默认删中间文件） | 已实现 |
+| `browser_scratch` | 暂存区 stats / list / read / clear | 已实现 |
 | `browser_forum` | 站点适配器：QQ 论坛（腾讯频道）游标分页/可见翻页/去重/关键词，输出 tiny_id | 已实现 |
 | `browser_download` | 按 URL 下载（共享 cookie）或点击元素下载 | 已实现 |
 | `browser_status` | 扁平诊断对象：浏览器 / 标签页 / 锁 / 工作区 / 最近错误 | 已实现 |
