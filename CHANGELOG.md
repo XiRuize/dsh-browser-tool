@@ -2,6 +2,57 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。本文件只记录真实发生或明确标记为「进行中」的变更，不把计划写成已发布事实。
 
+## [未发布] — 0.5.0（QQ 论坛分页算法，代码已落地）
+
+### 新增
+
+- **`browser_forum` 分页**：`paginate:true` 走 `GetChannelTimelineFeeds` 游标，每版块可到 100+ 条；`concurrency` 控制并行版块数（1–6）。
+- **动态 bkn**：从 Cookie 里的 `p_skey/skey` 现算 `g_tk`（djb2），5 分钟缓存；命中 150/403 自动刷新重试，不再依赖抄来的常量。
+- **可见翻页**：`watch:true` 在窗口里真实滚动加载（约 0.4s/条），便于人工验收；与 `paginate` 共用同一套输出。
+- **自适应退避**：429/5xx/网络错误按指数退避 + 抖动重试；`stats.backoffs` 可观测。
+- **按版块增量落盘**：每个版块完成即写 `qq-forum-<版块>.json`，中断不丢已采数据。
+- **启动自愈**：Windows 下启动失败（exitCode 21 / profile 占用）自动清理残留 msedge 与 lockfile 后重试；`dispose()` 也会清理。
+
+### 实测
+
+- 14 个版块 × 100 条：**1237 条 / 15.6s / 113 请求 / 79 条每秒**，100% 带作者 tiny_id。
+- 可见滚动翻页：二手 100 条 / 18 次滚动 / 40s。
+## [未发布] — 0.4.0（静默/非静默切换，代码已落地）
+
+### 新增
+
+- **`browser_show`**：运行中切换 `headless` / `offscreen` / `window`；`show` 用 CDP `Browser.setWindowBounds` 把窗口拉到前台，`hide` 移回屏幕外；`set` 通过重启上下文切换有头/无头并保留登录态、按需恢复标签页 URL。
+- 工具面 16 → **17** 个。
+
+## [未发布] — 0.3.0（性能优化，代码已落地）
+
+针对 QQ 论坛（腾讯频道）这类 SSR + JSON API 的重站点提速。实测（本机、20 条 URL、并发 4）：
+渲染路径 P50 2.4s → **1.18s**；HTTP 快通道 P50 **0.73s**、吞吐 2.4 条/秒；
+QQ 论坛适配器用 14 个版块 SSR 在 **11.8s 内归档 122 条帖子**（100% 带作者 tiny_id）。
+
+### 新增
+
+- **`browser_fetch`**：复用浏览器登录 Cookie / UA / Referer 的 HTTP 快通道，不渲染页面；命中 JS 挑战或 401/403/429 时标记 `blocked` 并提示回落渲染。
+- **`browser_forum`**：站点适配器，采集腾讯频道帖子。默认 3 个版块；`discover=true` 时渲染一次频道页自动发现全部版块 `subc`；按帖子 id 反解作者 `tiny_id` 去重，支持关键词过滤与 JSON 分页配置。
+- **`records` 提取模式**：`itemSelector` + `fields` 一次返回整页列表数组（`browser_extract` 与 `browser_collect` 均支持）。
+- **`lib/adapters/qq-forum.js`** 与 `skills/qq-forum/SKILL.md`。
+- **`lib/fetch.js`**：User-Agent 归一（去掉 Headless 标记）、同源 Referer、指数退避重试、挑战页识别。
+- **`test/bench.mjs`**（P50/P95/吞吐基准）与 **`test/forum-live.mjs`**（真实论坛验收）。
+
+### 变更
+
+- **导航**：`manager.navigate` 去掉固定 `sleep(450)` + 2.5s `waitForLoadState`，改为 `navigateSettleMs`（默认 120ms）+ 可选 `navigateWaitSelector`。
+- **采集管道**：worker 复用常驻标签页；并发默认 4（最大 8）；`delayMs` 默认 0 并在命中风控时自动退避；单条导航失败重试（`collectRetries`）；`render=false` 走 HTTP 快通道并在挑战页时自动回落渲染。
+- **检查点**：全量重写改为「JSONL 增量追加 + 1s 防抖快照 + 结束落盘」，续跑时用 JSONL 补齐快照落后的结果。
+- **上限**：`browser_collect` 单次 20 → **100** 条，`urls` 100 → **200** 条。
+- **网络记录**：`NetworkRecorder` 增加 `requestBody` 捕获，HAR 导出包含 `request.postData`。
+- **工具面**：14 → **16** 个工具（新增 `browser_fetch`、`browser_forum`）。
+
+### 兼容性
+
+- 旧工具名、旧参数键、`@eN` 引用语义不变；新增参数全部可选。
+- `collectConcurrency` 默认 2→4、`collectDelayMs` 800→0、`collectRenderWaitMs` 700→250，如需旧行为显式配置即可回退。
+
 ## [未发布] — 0.2.0（代码已落地）
 
 `0.2.0` 三项目标：静默长时运行、深层前端检查、多子代理协作。代码已实现；真实 Edge 端到端验收与 GitHub 发布仍待完成。

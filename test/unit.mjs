@@ -12,6 +12,7 @@ import { TabLockManager } from '../lib/locks.js'
 import { ArtifactStore } from '../lib/artifacts.js'
 import { parseLabeledText, cleanLabeledValue } from '../lib/extract.js'
 import { NetworkRecorder } from '../lib/network.js'
+import { parseSsrPosts, parseFeedApi, tinyIdOfFeed, bknFromSkey } from '../lib/adapters/qq-forum.js'
 import { collectUrls } from '../lib/collect.js'
 import { registerBrowserTools } from '../lib/tools.js'
 import { BrowserManager } from '../lib/manager.js'
@@ -628,61 +629,121 @@ test('NetworkRecorder includeBodies=false 时跳过响应体', async () => {
 })
 
 // ---------------------------------------------------------------------------
+// QQ 论坛适配器
+// ---------------------------------------------------------------------------
+
+test('qq-forum 适配器：bkn、SSR 解析、tiny_id 反解与 API 归一', () => {
+  assert.equal(bknFromSkey(''), '')
+  assert.match(bknFromSkey('abc123'), /^\d+$/)
+  assert.equal(bknFromSkey('abc123'), bknFromSkey('abc123'))
+  assert.notEqual(bknFromSkey('abc123'), bknFromSkey('abc124'))
+  const feedId = 'B_bfd9f16a00280d001441152186791961150X60'
+  assert.equal(tinyIdOfFeed(feedId), '144115218679196115')
+  assert.equal(tinyIdOfFeed('B_notinyidX60'), '')
+
+  const html = `
+    <div class="msgBox" data-index="${feedId}" data-v-ddf1530c>
+      <div class="user"><div class="game-guild-main__waterfalls__item">
+        <a class="game-guild-main__short-content pointer" href="https://pd.qq.com/g/iloveswufe/post/${feedId}?subc=634804985">
+          <div class="game-guild-main__short-content__info">
+            <div class="user-info">
+              <div class="avatar no-copy avatar--circle"><img class="img" src="https://example.com/avatar.png" alt="avatar-img"></div>
+              <h3 class="nick hover-underline">momo</h3>
+            </div>
+            <h3 class="edit-time">13小时前</h3>
+          </div>
+          <div class="game-guild-main__short-content__detail"><span class="feed-detail-text">明天体测跳远找男演员</span></div>
+        </a>
+      </div></div>
+    </div>`
+  const posts = parseSsrPosts(html, { section: '全部' })
+  assert.equal(posts.length, 1)
+  assert.equal(posts[0].post_id, feedId)
+  assert.equal(posts[0].author_tinyid, '144115218679196115')
+  assert.equal(posts[0].author_nick, 'momo')
+  assert.equal(posts[0].posted_at, '13小时前')
+  assert.equal(posts[0].text, '明天体测跳远找男演员')
+  assert.match(posts[0].link, /\/post\//)
+
+  const apiPosts = parseFeedApi({
+    data: {
+      vecFeed: [
+        {
+          id: feedId,
+          createTime: '1794234815',
+          commentCount: 7,
+          poster: { id: '144115218679196115', nick: 'momo', icon: { iconUrl: 'https://example.com/a.png' } },
+          title: { contents: [{ type: 1, text_content: { text: '明天体测跳远找男演员' } }] },
+          contents: { contents: [] },
+          visitorInfo: { viewCount: 248 },
+          ip_location_province: '四川',
+        },
+      ],
+    },
+  })
+  assert.equal(apiPosts.length, 1)
+  assert.equal(apiPosts[0].author_tinyid, '144115218679196115')
+  assert.equal(apiPosts[0].view_count, 248)
+  assert.equal(apiPosts[0].text, '明天体测跳远找男演员')
+})
+
+// ---------------------------------------------------------------------------
 // collect.js
 // ---------------------------------------------------------------------------
 
-test('collectUrls 25 URL：首次 20 → checkpoint → cursor 续跑 5 → 第三次 done，无重复', async () => {
+test('collectUrls 120 URL：单次上限 100 → checkpoint → cursor 续跑 20 → done，无重复', async () => {
   const artifactDir = path.join(tmpRoot, 'collect-cursor')
-  const urls = Array.from({ length: 25 }, (_, index) => `http://local.test/detail?n=${index + 1}`)
+  const urls = Array.from({ length: 120 }, (_, index) => `http://local.test/detail?n=${index + 1}`)
   const manager = makeCollectManager({ artifactDir })
   const config = { artifactDir, collectRenderWaitMs: 1, collectDelayMs: 0, navigationTimeoutMs: 5000 }
 
   const first = await collectUrls(
     manager,
-    { urls, mode: 'text', jobId: 'unit-collect-25', save: false, delayMs: 0, concurrency: 2 },
+    { urls, mode: 'text', jobId: 'unit-collect-120', save: false, delayMs: 0, concurrency: 2 },
     config,
   )
   assert.equal(first.done, false)
-  assert.equal(first.nextCursor, 20)
-  assert.equal(first.count, 20)
-  assert.equal(first.succeeded, 20)
-  assert.equal(first.processed, 20)
-  assert.equal(first.total, 25)
-  assert.equal(first.remaining, 5)
+  assert.equal(first.nextCursor, 100)
+  assert.equal(first.count, 100)
+  assert.equal(first.succeeded, 100)
+  assert.equal(first.processed, 100)
+  assert.equal(first.total, 120)
+  assert.equal(first.remaining, 20)
   const checkpoint = JSON.parse(await fs.readFile(first.checkpointPath, 'utf8'))
-  assert.equal(checkpoint.nextCursor, 20)
-  assert.equal(checkpoint.doneUrls.length, 20)
+  assert.equal(checkpoint.nextCursor, 100)
+  assert.equal(checkpoint.doneUrls.length, 100)
   assert.equal(checkpoint.done, false)
 
   const second = await collectUrls(
     manager,
-    { urls, mode: 'text', jobId: 'unit-collect-25', save: false, delayMs: 0, concurrency: 2 },
+    { urls, mode: 'text', jobId: 'unit-collect-120', save: false, delayMs: 0, concurrency: 2 },
     config,
   )
   assert.equal(second.resumed, true)
   assert.equal(second.done, true)
-  assert.equal(second.nextCursor, 25)
-  assert.equal(second.count, 5)
-  assert.equal(second.succeeded, 5)
+  assert.equal(second.nextCursor, 120)
+  assert.equal(second.count, 20)
+  assert.equal(second.succeeded, 20)
   assert.deepEqual(
     second.results.map(result => result.url),
-    urls.slice(20),
+    urls.slice(100),
   )
 
   const third = await collectUrls(
     manager,
-    { urls, mode: 'text', jobId: 'unit-collect-25', save: false, delayMs: 0, concurrency: 2 },
+    { urls, mode: 'text', jobId: 'unit-collect-120', save: false, delayMs: 0, concurrency: 2 },
     config,
   )
   assert.equal(third.done, true)
   assert.equal(third.count, 0)
-  assert.equal(third.nextCursor, 25)
+  assert.equal(third.nextCursor, 120)
 
   const allUrls = [...first.results, ...second.results, ...third.results].map(result => result.url)
-  assert.equal(allUrls.length, 25)
-  assert.equal(new Set(allUrls).size, 25, '续跑不得重复采集已完成 URL')
+  assert.equal(allUrls.length, 120)
+  assert.equal(new Set(allUrls).size, 120, '续跑不得重复采集已完成 URL')
   assert.equal(second.checkpointPath, first.checkpointPath)
-  assert.equal(manager.created.length, 25, '每个 URL 只创建一次页面')
+  // 每次调用只按并发数建页（两次调用共 4 个），不再逐条 URL 建页。
+  assert.ok(manager.created.length <= 4, `复用常驻页面：创建页面数应不超过 4，实际 ${manager.created.length}`)
 })
 
 test('collectUrls 失败隔离：单条失败不影响后续且写入 checkpoint', async () => {
@@ -758,7 +819,7 @@ test('collectUrls deadline 到达时优雅返回 nextCursor 并保存 checkpoint
 // tools.js 工具面
 // ---------------------------------------------------------------------------
 
-test('tools.js 注册 14 个工具、schema 合法、并发安全分类与旧参数键齐全', () => {
+test('tools.js 注册 17 个工具、schema 合法、并发安全分类与旧参数键齐全', () => {
   const config = resolveConfig({ artifactDir: path.join(tmpRoot, 'tools-artifacts') })
   const tools = new Map()
   const fakeCtx = {
@@ -784,12 +845,15 @@ test('tools.js 注册 14 个工具、schema 合法、并发安全分类与旧参
     'browser_tabs',
     'browser_workspace',
     'browser_network',
+    'browser_fetch',
+    'browser_forum',
+    'browser_show',
     'browser_collect',
     'browser_download',
     'browser_close',
     'browser_status',
   ]
-  assert.equal(tools.size, 14)
+  assert.equal(tools.size, 17)
   assert.deepEqual([...tools.keys()].sort(), expectedNames.slice().sort())
 
   for (const [name, tool] of tools) {
@@ -819,6 +883,9 @@ test('tools.js 注册 14 个工具、schema 合法、并发安全分类与旧参
     browser_workspace: ['action', 'workspaceId', 'label', 'role', 'toAgent', 'tab', 'note'],
     browser_network: ['action', 'tab', 'urlPattern', 'resourceTypes', 'maxEntries', 'maxBodyChars', 'id', 'urlContains', 'maxChars'],
     browser_collect: ['urls', 'mode', 'selector', 'labels', 'fields', 'maxChars', 'limit', 'concurrency', 'delayMs', 'save', 'jobId', 'cursor', 'deadlineMs', 'checkpointPath'],
+    browser_fetch: ['url', 'method', 'headers', 'body', 'timeoutMs', 'retries', 'maxChars', 'save'],
+    browser_forum: ['guild', 'limit', 'keywords', 'discover', 'sections', 'api', 'save'],
+    browser_show: ['action', 'visibility', 'tab', 'restoreTabs'],
     browser_download: ['tab', 'url', 'ref', 'selector', 'path'],
   }
   for (const [name, keys] of Object.entries(oldKeys)) {
@@ -833,6 +900,9 @@ test('tools.js 注册 14 个工具、schema 合法、并发安全分类与旧参
     ['browser_observe', {}, true],
     ['browser_inspect', {}, true],
     ['browser_extract', {}, true],
+    ['browser_fetch', {}, true],
+    ['browser_forum', {}, true],
+    ['browser_show', {}, true],
     ['browser_screenshot', {}, true],
     ['browser_status', {}, true],
     ['browser_open', {}, false],

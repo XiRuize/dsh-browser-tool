@@ -1,4 +1,4 @@
-﻿# @future/dsh-browser-tool
+# @future/dsh-browser-tool
 
 给 [DeepSeek Harness](https://github.com/deepseek-ai) 的浏览器操作插件：一个可长期驻留、默认后台静默的真实 Edge / Chromium 浏览器，加上面向「浏览 → 定位 → 提取 → 存证 → 批处理」的工具面。
 
@@ -6,7 +6,7 @@
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![runtime](https://img.shields.io/badge/runtime-Node.js%2020%2B%20%7C%2022-339933)
 
-> **版本状态**：`0.2.0` 的代码已落地（14 个工具、分层观测、工作区与恢复），但**真实 Edge 端到端验收仍待 install-verify 完成**，本仓库也尚未发布到 GitHub。已交付的基线是 `0.1.0`（详见 [`CHANGELOG.md`](CHANGELOG.md)）。
+> **版本状态**：`0.3.0` 的代码已落地（17 个工具、分层观测、工作区与恢复），但**真实 Edge 端到端验收仍待 install-verify 完成**，本仓库也尚未发布到 GitHub。已交付的基线是 `0.1.0`（详见 [`CHANGELOG.md`](CHANGELOG.md)）。
 
 ## 定位
 
@@ -104,11 +104,17 @@ C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
 | `timezoneId` | `Asia/Shanghai` | 时区 |
 | `actionTimeoutMs` | `15000` | 单步动作超时 |
 | `navigationTimeoutMs` | `45000` | 页面导航超时 |
+| `navigateSettleMs` | `120` | 导航后短沉降，替代固定 sleep(450) |
+| `navigateWaitSelector` | 空 | 导航后等待某选择器出现（适合必须水合的 SPA） |
+| `collectRetries` | `2` | 单条导航/请求重试次数 |
+| `collectPageReuse` | `true` | 采集 worker 复用常驻标签页 |
+| `fetchTimeoutMs` | `30000` | HTTP 快通道超时 |
+| `fetchRetries` | `2` | HTTP 快通道重试次数 |
 | `snapshotMaxChars` | `12000` | 快照字符预算 |
 | `extractMaxChars` | `30000` | 提取返回上限（超出落盘） |
-| `collectConcurrency` | `2` | 批量采集并发，最大 4 |
-| `collectDelayMs` | `800` | 批量采集每条间隔 |
-| `collectRenderWaitMs` | `700` | 采集渲染等待 |
+| `collectConcurrency` | `4` | 批量采集并发，最大 8 |
+| `collectDelayMs` | `0` | 批量采集每条间隔（命中风控自动退避） |
+| `collectRenderWaitMs` | `250` | 采集渲染等待（选择器就绪优先） |
 | `idleCloseMs` | `0` | 空闲自动关闭；`0` 表示不自动关 |
 | `watchdogIntervalMs` | `30000` | 健康检查间隔 |
 | `autoRelaunch` | `true` | 断开后自动重启 |
@@ -148,12 +154,15 @@ C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
 | `browser_observe` | 按层观测：structure / text / visual / network / console / meta | 已实现 |
 | `browser_inspect` | DOM / HTML / CSS / a11y / 资源 / 存储 / 性能 / eval | 已实现 |
 | `browser_act` | click / type / press / scroll / select / check / hover / drag / upload / back / forward / reload / wait / waitFor / dialog；默认回读核验 | 已实现 |
-| `browser_extract` | text / html / links / tables / labeled / structured / markdown / images / forms | 已实现 |
+| `browser_extract` | text / html / links / tables / labeled / structured / **records** / markdown / images / forms | 已实现 |
 | `browser_screenshot` | 页面 / 元素 / 整页截图 | 已实现 |
 | `browser_tabs` | list / switch / close / claim / release | 已实现 |
 | `browser_workspace` | create / join / status / grant / handoff / close；status 只报告当前活动工作区 | 已实现 |
 | `browser_network` | start / stop / list / get / clear / export(HAR) | 已实现 |
-| `browser_collect` | urls 最多 100、单次处理 20 的游标 + checkpoint 可续跑批处理 | 已实现 |
+| `browser_fetch` | HTTP 快通道：复用登录 Cookie/UA 直连，不渲染；命中风控标记 blocked | 已实现 |
+| `browser_collect` | urls 最多 200、单次处理 100；页面复用 + 并发 8 + JSONL 增量检查点；`render=false` 走快通道 | 已实现 |
+| `browser_show` | 静默/非静默切换：headless / offscreen / window，show 拉到前台、hide 移出屏幕 | 已实现 |
+| `browser_forum` | 站点适配器：QQ 论坛（腾讯频道）游标分页/可见翻页/去重/关键词，输出 tiny_id | 已实现 |
 | `browser_download` | 按 URL 下载（共享 cookie）或点击元素下载 | 已实现 |
 | `browser_status` | 扁平诊断对象：浏览器 / 标签页 / 锁 / 工作区 / 最近错误 | 已实现 |
 | `browser_close` | 关闭浏览器、释放目录锁，保留登录态 | 已实现 |

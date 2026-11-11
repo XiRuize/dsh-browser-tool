@@ -76,6 +76,15 @@ const frame = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><ti
 <button id="iframeBtn" onclick="document.body.insertAdjacentHTML('beforeend','<p>iframe 已点击</p>')">iframe按钮</button>
 </body></html>`
 
+const list = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>列表页</title></head><body>
+<h1>列表页</h1><ul id="items">
+${Array.from(
+  { length: 5 },
+  (_, index) =>
+    `<li class="item"><h3 class="item-title">条目 ${index + 1}</h3><span class="item-author">作者${index + 1}</span><a class="item-link" href="/detail?n=${index + 1}">查看</a></li>`,
+).join('')}
+</ul></body></html>`
+
 function json(response, value) {
   response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
   response.end(JSON.stringify(value))
@@ -102,6 +111,7 @@ export async function startLocalServer() {
       return
     }
     if (url.pathname === '/detail') return html(response, detail)
+    if (url.pathname === '/list') return html(response, list)
     if (url.pathname === '/frame') return html(response, frame)
     return html(response, page)
   })

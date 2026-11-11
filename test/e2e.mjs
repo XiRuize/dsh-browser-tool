@@ -213,8 +213,37 @@ try {
   const harStat = await fs.stat(har.harPath)
   check(harStat.size > 100, 'HAR 文件非空')
 
-  step = 'browser_collect cursor 续跑（22 URL）'
-  const collectUrls = Array.from({ length: 22 }, (_, index) => `${base}/detail?n=${index + 1}`)
+  step = 'browser_fetch 快通道 + records 数组提取 + collect render=false'
+  const fetched = await call('browser_fetch', { url: `${base}/api/company` })
+  check(fetched.status === 200 && fetched.json?.creditCode === '91310000TEST', 'fetch 直连 JSON 接口')
+  check(fetched.blocked === false, 'fetch 未误判风控')
+  await call('browser_open', { url: `${base}/list`, tab: mainTab })
+  const records = await call('browser_extract', {
+    mode: 'records',
+    itemSelector: '.item',
+    fields: {
+      title: '.item-title',
+      author: '.item-author',
+      link: { selector: '.item-link', attr: 'href' },
+    },
+  })
+  check(records.matches === 5 && records.data?.length === 5, 'records 一次返回 5 条')
+  check(records.data[0].author === '作者1', 'records 字段相对列表项解析')
+  check(String(records.data[0].link).includes('/detail'), 'records 支持 attr 取链接')
+  const httpCollect = await call('browser_collect', {
+    urls: [`${base}/detail?h=1`, `${base}/detail?h=2`, `${base}/detail?h=3`],
+    mode: 'text',
+    render: false,
+    save: false,
+    jobId: 'e2e-http',
+  })
+  check(
+    httpCollect.count === 3 && httpCollect.succeeded === 3 && httpCollect.results.every(item => item.via === 'http'),
+    'collect render=false 走 HTTP 快通道',
+  )
+
+  step = 'browser_collect cursor 续跑（120 URL）'
+  const collectUrls = Array.from({ length: 120 }, (_, index) => `${base}/detail?n=${index + 1}`)
   const collectArgs = {
     urls: collectUrls,
     mode: 'text',
@@ -225,15 +254,18 @@ try {
   }
   const firstCollect = await call('browser_collect', collectArgs)
   check(firstCollect.done === false, 'collect 首次未完成')
-  check(firstCollect.nextCursor === 20, 'collect 首次 nextCursor=20')
-  check(firstCollect.count === 20 && firstCollect.succeeded === 20, 'collect 首次完成 20 条')
+  check(
+    firstCollect.nextCursor === 100,
+    `collect 首次 nextCursor=100（实际 ${firstCollect.nextCursor}, count ${firstCollect.count}, done ${firstCollect.done}, stopped ${firstCollect.stoppedReason}）`,
+  )
+  check(firstCollect.count === 100 && firstCollect.succeeded === 100, 'collect 首次完成 100 条')
   const secondCollect = await call('browser_collect', collectArgs)
   check(secondCollect.done === true, 'collect 续跑后完成')
-  check(secondCollect.count === 2 && secondCollect.succeeded === 2, 'collect 续跑完成剩余 2 条')
+  check(secondCollect.count === 20 && secondCollect.succeeded === 20, 'collect 续跑完成剩余 20 条')
   const thirdCollect = await call('browser_collect', collectArgs)
   check(thirdCollect.count === 0 && thirdCollect.done === true, 'collect 第三次不重复处理')
   const checkpoint = JSON.parse(await fs.readFile(thirdCollect.checkpointPath, 'utf8'))
-  check(checkpoint.doneUrls.length === 22, 'collect checkpoint doneUrls=22')
+  check(checkpoint.doneUrls.length === 120, 'collect checkpoint doneUrls=120')
   check(Boolean(thirdCollect.savedPath), 'collect 保存结果 JSON')
 
   step = 'browser_workspace create/join/status 与 reader 写拒绝'
@@ -268,6 +300,20 @@ try {
   const closedWorkspace = await call('browser_workspace', { action: 'close', workspaceId, closeTabs: true })
   check(closedWorkspace.workspaceId === workspaceId, 'workspace close 返回 id')
   check(closedWorkspace.closedTabs.includes(wsTab), 'workspace closeTabs 关闭工作区标签页')
+
+  step = 'browser_show 静默/非静默切换'
+  const showStatus = await call('browser_show', { action: 'status' })
+  check(showStatus.visibility === 'headless' && showStatus.headless === true, 'show status 报告 headless')
+  const toWindow = await call('browser_show', { action: 'set', visibility: 'window', restoreTabs: false })
+  check(toWindow.changed === true && toWindow.visibility === 'window', 'show set 切到 window')
+  const shown = await call('browser_show', { action: 'show' })
+  check(shown.shown === true, 'show 把窗口拉到前台')
+  const hidden = await call('browser_show', { action: 'hide' })
+  check(hidden.shown === false, 'hide 把窗口移出屏幕')
+  const bounds = await call('browser_show', { action: 'status' })
+  check(bounds.visibility === 'window' && bounds.bounds?.left <= -1000, 'status 报告窗口已移出屏幕')
+  const backToHeadless = await call('browser_show', { action: 'set', visibility: 'headless', restoreTabs: false })
+  check(backToHeadless.visibility === 'headless', 'show set 切回 headless')
 
   step = 'browser_status / browser_tabs 最终状态'
   const status = await call('browser_status')

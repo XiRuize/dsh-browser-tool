@@ -259,11 +259,12 @@ eval 默认关闭（allowEval=false）。如确需执行，请在 cordis.patch.y
 | 参数 | 类型 | 默认 | 说明 |
 |---|---|---|---|
 | `tab` | string | 当前页 | 目标标签页 |
-| `mode` | string | `text` | `text` / `html` / `links` / `tables` / `labeled` / `structured` / `markdown` / `images` / `forms` |
+| `mode` | string | `text` | `text` / `html` / `links` / `tables` / `labeled` / `structured` / `records` / `markdown` / `images` / `forms` |
 | `selector` | string | — | 限定容器 |
 | `container` | string | — | `selector` 的兼容别名 |
 | `labels` | string[] | — | `labeled` 的标签列表 |
-| `fields` | object | — | `structured` 字段映射 |
+| `itemSelector` | string | — | `records` 的记录容器选择器 |
+| `fields` | object | — | `structured` / `records` 字段映射；records 下相对每个列表项取值 |
 | `maxChars` | integer | `extractMaxChars` | 返回上限 |
 | `offset` | integer | `0` | `text` / `markdown` 的字符窗口起点 |
 | `limit` | integer | `200` | `text`/`markdown` 为字符窗口大小；数组模式为条数上限（内部最多 1000） |
@@ -283,7 +284,7 @@ eval 默认关闭（allowEval=false）。如确需执行，请在 cordis.patch.y
 }
 ```
 
-`structured` / `links` / `tables` / `images` / `forms` 返回 `data` 对象或数组；超长或分段时 `savedPath` 指向完整文件，`nextCursor` 用于继续读取窗口。
+`structured` 返回 `data` 对象；`records` / `links` / `tables` / `images` / `forms` 返回 `data` 数组；`records` 一次抽完整列表，避免逐条选择器调用；超长或分段时 `savedPath` 指向完整文件，`nextCursor` 用于继续读取窗口。
 
 ---
 
@@ -412,13 +413,16 @@ eval 默认关闭（allowEval=false）。如确需执行，请在 cordis.patch.y
 
 | 参数 | 类型 | 默认 | 说明 |
 |---|---|---|---|
-| `urls` | string[] | 必填 | 去重后最多 **100** 条；单次调用最多处理 **20** 条，其余返回 `nextCursor` |
-| `mode` | string | `text` | `text` / `html` / `links` / `tables` / `labeled` / `structured` |
+| `urls` | string[] | 必填 | 去重后最多 **200** 条；单次调用最多处理 **100** 条，其余返回 `nextCursor` |
+| `mode` | string | `text` | `text` / `html` / `links` / `tables` / `labeled` / `structured` / `records` / `markdown` |
+| `itemSelector` | string | — | records 模式必填：每条记录的容器选择器 |
+| `render` | boolean | `true` | `false` 走 HTTP 快通道（不渲染，命中挑战自动回落渲染） |
+| `retries` | integer | `2` | 单条导航/请求重试次数 |
 | `selector` / `labels` / `fields` | — | — | 同 `browser_extract` |
 | `maxChars` | integer | `8000` | 每条保留字符数 |
 | `limit` | integer | `200` | 数组模式每页条数 |
-| `concurrency` | integer | `2` | 1–4 |
-| `delayMs` | integer | `800` | 每条间隔 |
+| `concurrency` | integer | `4` | 1–8 |
+| `delayMs` | integer | `0` | 每条间隔；命中风控自动退避 |
 | `includeFrames` | boolean | `false` | 合并 iframe |
 | `save` | boolean | `true` | 是否写结果 JSON |
 | `jobId` | string | 自动派生 | 续跑任务 ID；相同 jobId + urls 复用检查点 |
@@ -446,12 +450,75 @@ eval 默认关闭（allowEval=false）。如确需执行，请在 cordis.patch.y
   "checkpointPath": "C:/Users/生升/.dsh/browser-tool/artifacts/jobs/.../checkpoint.json",
   "savedPath": "C:/Users/生升/.dsh/browser-tool/artifacts/collect-....json",
   "results": [{ "url": "...", "ok": true, "title": "...", "blocked": false, "data": "..." }],
-  "note": "单次最多处理 20 条；本次处理到 cursor=20，带同一 urls 列表和 cursor=20 继续。"
+  "note": "单次最多处理 100 条；本次处理到 cursor=100，带同一 urls 列表和 cursor=100 继续。"
 }
 ```
 
 续跑：`done=false` 时，带**同一 `urls` 列表**、同一 `jobId` 和返回的 `nextCursor` 作为 `cursor` 再调用；`doneUrls` 去重，已完成 URL 不重复抓取。
 
+---
+
+## `browser_fetch`
+
+HTTP 快通道：复用当前浏览器上下文的 Cookie / UA / Referer 直接发请求，不渲染页面。
+
+| 参数 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `url` | string | 必填 | 请求地址 |
+| `method` | string | `GET` | `GET` / `POST` / `PUT` / `PATCH` / `DELETE` / `HEAD` |
+| `headers` | object | — | 额外请求头；Cookie 自动沿用浏览器上下文 |
+| `body` | string | — | 请求体 |
+| `timeoutMs` | integer | 配置值 | 超时毫秒 |
+| `retries` | integer | `2` | 网络错误重试次数 |
+| `maxChars` | integer | `20000` | 返回正文上限，超出落盘 |
+| `save` | boolean | `true` | 超长时是否落盘完整正文 |
+
+返回 `{ ok, status, finalUrl, contentType, bytes, body, json, blocked, elapsedMs, retriesUsed, savedPath }`。
+`blocked=true` 表示命中 JS 挑战 / 验证码 / 401 / 403 / 429，应改用渲染路径。
+
+---
+
+## `browser_forum`
+
+站点适配器：采集 QQ 论坛（腾讯频道 `pd.qq.com`）帖子。
+
+| 参数 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `guild` | string | `iloveswufe` | 频道号或完整频道 URL |
+| `limit` | integer | `100` | 目标条数，最大 1000 |
+| `keywords` | string[] | — | 关键词过滤（正文或昵称） |
+| `discover` | boolean | `false` | 渲染一次频道页，自动发现全部版块 `subc`（约 4–6 秒） |
+| `sections` | object[] | 全部/热门/二手 | `[{name, subc}]`，可自行补充 |
+| `paginate` | boolean | `false` | 每个版块走 `GetChannelTimelineFeeds` 游标翻页（100+ 条/版块） |
+| `watch` | boolean | `false` | 可见翻页：窗口里真实滚动加载（慢，便于验收） |
+| `concurrency` | integer | `3` | paginate 时并行版块数，1–6 |
+| `api` | object | — | 可选 JSON 分页：`{body, pageSize, maxPages, headers}`，`body` 支持 `{{cursor}}` / `{{pageSize}}` 占位 |
+| `save` | boolean | `true` | 是否落盘 JSON |
+
+每条帖子返回 `post_id / author_tinyid / author_nick / posted_at / text / link`。
+作者 `tiny_id` 由帖子 id 反解（`1441152` + 11 位），不依赖接口。
+---
+
+## `browser_show`
+
+静默 / 非静默切换。三种可见性：
+
+| 值 | 含义 | 资源 |
+|---|---|---|
+| `headless` | 完全无窗口（默认） | 最省 |
+| `offscreen` | 有窗口但放在屏幕外，可随时 `show` | 中 |
+| `window` | 正常窗口 | 高 |
+
+| 参数 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `action` | string | `status` | `status` / `set` / `show` / `hide` |
+| `visibility` | string | — | `set` 时的目标值：`headless` / `offscreen` / `window` |
+| `tab` | string | 当前页 | 目标标签页 |
+| `restoreTabs` | boolean | `true` | `set` 重启后是否恢复原标签页 URL |
+
+说明：`set` 会重启浏览器上下文以切换有头/无头（Cookie 与登录态保留在 userDataDir）；
+`show`/`hide` 只在 `offscreen`/`window` 下有效，通过 CDP 移动窗口位置，不重启。
+运行时切换不会写回配置，重启 DSH 后仍按配置里的 `visibility` 启动。
 ---
 
 ## `browser_download`
@@ -526,6 +593,8 @@ eval 默认关闭（allowEval=false）。如确需执行，请在 cordis.patch.y
 | `browser_tabs` | `list` 是，其余否 | `list` 是 |
 | `browser_workspace` | `status` 是，其余否 | `status` 是 |
 | `browser_network` | `list` / `get` / `export` 是 | 同上 |
+| `browser_fetch` | 是 | 是 |
+| `browser_forum` | 是 | 是 |
 | `browser_collect` | 否（导航） | 否 |
 | `browser_download` | 否 | 否 |
 | `browser_status` | 是 | 是 |

@@ -1,4 +1,4 @@
-﻿# @future/dsh-browser-tool
+# @future/dsh-browser-tool
 
 Browser-operation plugin for [DeepSeek Harness](https://github.com/deepseek-ai): a long-lived, silent-by-default real Edge / Chromium browser plus a tool surface for *observe → locate → act → verify → extract → archive*.
 
