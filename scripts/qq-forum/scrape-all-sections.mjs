@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
 
 import { BrowserManager } from '../../lib/manager.js'
@@ -6,9 +7,9 @@ import { resolveConfig } from '../../lib/config.js'
 import { fastFetch } from '../../lib/fetch.js'
 import { parseFeedApi } from '../../lib/adapters/qq-forum.js'
 
-const profile = 'C:/Users/生升/.dsh/browser-tool/profile'
-const artifact = 'C:/Users/生升/.dsh/browser-tool/artifacts'
-const outDir = process.argv[2] || 'C:/Users/生升/Documents/deepseek-harness/default-workspace/qq_forum/full'
+const profile = process.env.DSH_BROWSER_PROFILE || path.join(os.homedir(), '.dsh', 'browser-tool', 'profile')
+const artifact = process.env.DSH_BROWSER_ARTIFACTS || path.join(os.homedir(), '.dsh', 'browser-tool', 'artifacts')
+const outDir = process.argv[2] || path.join(process.cwd(), 'test-output', 'qq-forum')
 const limit = Number(process.argv[3] || 100)
 const concurrency = Number(process.argv[4] || 4)
 

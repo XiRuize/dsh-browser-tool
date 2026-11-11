@@ -2,11 +2,11 @@
 
 给 [DeepSeek Harness](https://github.com/deepseek-ai) 的浏览器操作插件：一个可长期驻留、默认后台静默的真实 Edge / Chromium 浏览器，加上面向「浏览 → 定位 → 提取 → 存证 → 批处理」的工具面。
 
-![status](https://img.shields.io/badge/status-0.7.1%20published-brightgreen)
+![status](https://img.shields.io/badge/status-0.7.2%20published-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![runtime](https://img.shields.io/badge/runtime-Node.js%2020%2B%20%7C%2022-339933)
 
-> **版本状态**：`0.7.1` 已发布到 GitHub（20 个工具：分层观测、工作区、静默/非静默切换、HTTP 快通道、QQ 论坛分页、临时暂存区与 F12 前端工作流）。`0.1.0` 是初始基线，版本演进见 [`CHANGELOG.md`](CHANGELOG.md)。
+> **版本状态**：`0.7.2` 已发布到 GitHub（20 个工具：分层观测、工作区、静默/非静默切换、HTTP 快通道、QQ 论坛分页、临时暂存区与 F12 前端工作流）。`0.1.0` 是初始基线，版本演进见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ## 定位
 
@@ -87,7 +87,7 @@ C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
 
 ## 配置
 
-配置写在 bundle 的 `cordis.patch.yml`，由插件在 `apply(ctx, rawConfig)` 中通过 `lib/config.js` 的 `resolveConfig` 归一化；插件**不导出 `Config` / `ConfigSchema`**，Loader 直接把原始 config 交给 `apply`。下表是 v0.2 的默认值：
+配置写在 bundle 的 `cordis.patch.yml`，由插件在 `apply(ctx, rawConfig)` 中通过 `lib/config.js` 的 `resolveConfig` 归一化；插件**不导出 `Config` / `ConfigSchema`**，Loader 直接把原始 config 交给 `apply`。下表是当前版本的默认值：
 
 | 字段 | 默认 | 说明 |
 |---|---|---|
@@ -170,7 +170,7 @@ C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
 | `browser_status` | 扁平诊断对象：浏览器 / 标签页 / 锁 / 工作区 / 最近错误 | 已实现 |
 | `browser_close` | 关闭浏览器、释放目录锁，保留登录态 | 已实现 |
 
-> 以上为代码已实现。真实 Edge 的端到端验收（headless、恢复、多代理、续跑）仍待 install-verify 在 [`docs/install-verification.md`](docs/install-verification.md) 记录结果；本文不把「已实现」写成「已验收」。
+> 以上为代码已实现；`test/unit.mjs`、`test/e2e.mjs` 与 GitHub Actions CI 已覆盖主要路径，真实站点 WAF / 验证码仍属未覆盖风险（见「已知限制」与 [`docs/performance.md`](docs/performance.md)）。
 
 ## 仓库结构
 
@@ -178,11 +178,11 @@ C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
 browser-tool/
 ├─ index.js                 # 插件入口：apply(ctx, rawConfig)
 ├─ cordis.patch.yml         # bundle patch 示例
-├─ package.json             # 依赖与 dsh.bundle 声明
+├─ package.json             # 依赖、npm scripts 与 dsh.bundle 声明
 ├─ lib/
-│  ├─ config.js             # 配置归一化（v0.2 默认值）
-│  ├─ host.js               # 浏览器启动 / 静默 / watchdog / 恢复
-│  ├─ manager.js            # 管理器门面：页面、工作区、锁
+│  ├─ config.js             # 配置归一化（含 scratch / fetch / 采集默认值）
+│  ├─ host.js               # 浏览器启动 / 静默切换 / watchdog / 恢复
+│  ├─ manager.js            # 管理器门面：页面池、工作区、锁、可见性
 │  ├─ pages.js              # 标签页与 owner
 │  ├─ workspace.js          # 工作区 / 租约 / ACL
 │  ├─ locks.js              # per-tab 读写锁
@@ -191,23 +191,31 @@ browser-tool/
 │  ├─ inspect.js            # 深层前端检查
 │  ├─ artifacts.js          # 产物库与 manifest
 │  ├─ act.js                # 动作与回读核验
-│  ├─ extract.js            # 提取
-│  ├─ network.js            # 网络捕获
-│  ├─ collect.js            # 可续跑批处理
-│  ├─ tools.js              # 工具注册
+│  ├─ extract.js            # 提取（含 records 数组模式）
+│  ├─ network.js            # 网络捕获（含请求体）
+│  ├─ collect.js            # 可续跑批处理 + 暂存区 + 工作页复用
+│  ├─ fetch.js              # HTTP 快通道（Cookie/UA/Referer）
+│  ├─ scratch.js            # 临时暂存区（TTL/容量清理）
+│  ├─ clean.js              # HTML/文本清洗
+│  ├─ devtools.js           # F12 式抓取与清洗
+│  ├─ adapters/qq-forum.js  # QQ 论坛适配器（游标分页 + bkn）
+│  ├─ tools.js              # 工具注册（20 个工具）
 │  └─ util.js               # 工具函数
 ├─ docs/
 │  ├─ MODULE-CONTRACT.md    # 实现子代理之间的接口契约
 │  ├─ architecture.md       # 分层架构与生命周期
 │  ├─ tools.md              # 工具参考
+│  ├─ performance.md        # 性能基线与提速记录
 │  ├─ subagents.md          # 多子代理协作指南
 │  ├─ installation.md       # 安装与 profile 排查
 │  ├─ troubleshooting.md    # 常见问题
 │  ├─ upstream-proposal.md  # 面向 DSH 社区的提案
-│  └─ install-verification.md # 安装验收记录（模板）
+│  └─ install-verification.md # 0.2.0 安装验收历史记录
 ├─ skills/
-│  └─ browser-field-ops/    # Agent Skill：浏览器分段协作流程
-├─ test/                    # smoke / deep / live-server / qcc；unit、e2e 待 tests-verify
+│  ├─ browser-field-ops/    # Agent Skill：浏览器分段协作流程
+│  └─ qq-forum/             # Agent Skill：QQ 论坛采集
+├─ scripts/qq-forum/        # 一次性运营脚本（不进 CI）
+├─ test/                    # unit / e2e / deep / docs / bench
 ├─ .github/                 # CI 与 issue / PR 模板
 ├─ LICENSE
 ├─ SECURITY.md
@@ -255,7 +263,7 @@ if (Test-Path .\test\unit.mjs) { & $node .\test\unit.mjs }
 if (Test-Path .\test\deep.mjs) { & $node .\test\deep.mjs }
 ```
 
-CI 只做语法检查与无浏览器单测，见 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)。真实 Edge 的验收命令与结果表见 [`docs/install-verification.md`](docs/install-verification.md)（当前为待填模板，尚未验收）。
+CI 做语法检查、无浏览器单测与文档一致性检查，见 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)；真实 Edge 的 E2E 需本机设置 `DSH_BROWSER_E2E=1` 后运行 `node test/e2e.mjs`，0.2.0 的安装验收记录见 [`docs/install-verification.md`](docs/install-verification.md)。
 
 ## 开源许可
 

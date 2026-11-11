@@ -1,6 +1,6 @@
 {
   "name": "@future/dsh-browser-tool",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "private": true,
   "type": "module",
   "description": "Silent, long-running browser runtime for DeepSeek Harness: persistent login, headless/offscreen visibility, watchdog recovery, snapshot refs, layered extraction, network capture, batch collection and multi-agent workspaces.",

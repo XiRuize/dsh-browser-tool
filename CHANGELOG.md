@@ -2,6 +2,15 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。本文件只记录真实发生或明确标记为「进行中」的变更，不把计划写成已发布事实。
 
+## [未发布] — 0.7.2（仓库清理）
+
+### 变更
+
+- 删除已废弃的一次性脚本：`test/qcc.mjs`、`test/qcc-detail.mjs`、`test/smoke.mjs`（`qcc*` 依赖外部站点，`smoke` 已被 `e2e` 覆盖）。
+- 删除本地临时脚本 `scripts/qq-forum/anon-check.mjs`；`watch-run.mjs` 保持 `.gitignore` 不入库。
+- README 仓库结构更新为当前文件树；CONTRIBUTING 验证命令改为 `unit + docs + e2e`。
+- `docs/install-verification.md` 标注为 0.2.0 历史归档，避免与当前工具面混淆。
+- `.gitignore` 增加 `test-output/`。
 ## [未发布] — 0.7.1（文档与仓库完善）
 
 ### 变更

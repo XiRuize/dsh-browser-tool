@@ -40,22 +40,24 @@ $pnpm = 'C:\Users\生升\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\pnpm
 ## 测试
 
 ```powershell
-$node = 'C:\Users\生升\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\node\bin\node.exe'
+$node = '<本机 node 路径>'
 
 # 1. 语法
 & $node --check .\index.js
 Get-ChildItem .\lib -Filter *.js | ForEach-Object { & $node --check $_.FullName }
 
-# 2. 无浏览器单测
-if (Test-Path .\test\unit.mjs) { & $node .\test\unit.mjs }
+# 2. 无浏览器单测 + 文档一致性
+& $node .\test\unit.mjs
+& $node .\test\docs.mjs
 
-# 3. 实机（需要本机 Edge，不在 CI 跑）
-if (Test-Path .\test\deep.mjs) { & $node .\test\deep.mjs }
+# 3. 实机 E2E（需要本机 Edge，不在 CI 跑）
+$env:DSH_BROWSER_E2E='1'; & $node .\test\e2e.mjs
 ```
 
 - 新增纯逻辑（配置归一化、引用解析、checkpoint、锁）请配 `test/unit.mjs` 用例。
-- 改动作 / 快照 / 采集行为时，同步更新 `test/deep.mjs` 或新增 e2e。
-- 测试产生的 `runtime/`、`test/.tmp/` 已在 `.gitignore` 中，不要提交。
+- 改动作 / 快照 / 采集行为时，同步更新 `test/e2e.mjs`；改动工具面时同步 `test/unit.mjs` 的工具数断言与 `docs/tools.md`。
+- 版本号、README 徽章、CHANGELOG 小节由 `test/docs.mjs` 校验；发版时一起改。
+- 测试产生的 `runtime/`、`test/.tmp/`、`test-output/` 已在 `.gitignore` 中，不要提交。
 
 ## 提交规范
 
