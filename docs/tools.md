@@ -539,6 +539,26 @@ F12 式抓取：当前页面（或 `selector` 范围）的原始 HTML 写入临�
 
 ---
 
+## `browser_devtools`
+
+F12 式前端工作流：抓取 → 暂存 → 清洗。
+
+| 参数 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `action` | string | `capture` | `capture` / `clean` / `manifest` / `clear` |
+| `tab` | string | 当前页 | 目标标签页（capture） |
+| `selector` | string | — | 只捕获某个容器（capture） |
+| `jobId` | string | — | clean/manifest/clear 必填 |
+| `clean` | boolean | `true` | capture 后立即清洗 |
+| `keep` | boolean | `true` | 保留暂存文件 |
+| `keepLinks` | boolean | `false` | 清洗时保留链接 |
+| `dropScripts` / `dropStyles` | boolean | `true` | 清洗开关 |
+| `maxChars` | integer | `8000` | 清洗预览上限 |
+
+`capture` 返回 `{ jobId, files, counts, meta, styleLinks, scriptSrcCount, cleaned }`；
+`clean` 返回 `{ path, bytes, stats, text }`，`stats` 含去脚本/样式/注释/内联事件/埋点数量。
+---
+
 ## `browser_scratch`
 
 | 参数 | 类型 | 默认 | 说明 |

@@ -15,6 +15,7 @@ import { NetworkRecorder } from '../lib/network.js'
 import { parseSsrPosts, parseFeedApi, tinyIdOfFeed, bknFromSkey } from '../lib/adapters/qq-forum.js'
 import { collectUrls } from '../lib/collect.js'
 import { cleanHtml, cleanText, extractTitle } from '../lib/clean.js'
+import { cleanFrontend } from '../lib/devtools.js'
 import { ScratchStore } from '../lib/scratch.js'
 import { registerBrowserTools } from '../lib/tools.js'
 import { BrowserManager } from '../lib/manager.js'
@@ -689,6 +690,19 @@ test('qq-forum 适配器：bkn、SSR 解析、tiny_id 反解与 API 归一', () 
   assert.equal(apiPosts[0].text, '明天体测跳远找男演员')
 })
 
+test('cleanFrontend 去脚本/样式/注释/内联事件/埋点', () => {
+  const html = `<!-- c --><div onclick="x()" data-track-id="1"><script>a()</script><style>.a{}</style><link rel="stylesheet" href="/a.css"><p>正文</p></div>`
+  const result = cleanFrontend(html)
+  assert.equal(result.stats.scripts, 1)
+  assert.equal(result.stats.styles, 2)
+  assert.equal(result.stats.comments, 1)
+  assert.equal(result.stats.handlers, 1)
+  assert.equal(result.stats.tracking, 1)
+  assert.ok(!result.html.includes('<script'))
+  assert.ok(!result.html.includes('onclick'))
+  assert.ok(!result.html.includes('data-track-id'))
+  assert.ok(result.text.includes('正文'))
+})
 // ---------------------------------------------------------------------------
 // clean.js / scratch.js
 // ---------------------------------------------------------------------------
@@ -853,7 +867,7 @@ test('collectUrls deadline 到达时优雅返回 nextCursor 并保存 checkpoint
 // tools.js 工具面
 // ---------------------------------------------------------------------------
 
-test('tools.js 注册 19 个工具、schema 合法、并发安全分类与旧参数键齐全', () => {
+test('tools.js 注册 20 个工具、schema 合法、并发安全分类与旧参数键齐全', () => {
   const config = resolveConfig({ artifactDir: path.join(tmpRoot, 'tools-artifacts') })
   const tools = new Map()
   const fakeCtx = {
@@ -884,12 +898,13 @@ test('tools.js 注册 19 个工具、schema 合法、并发安全分类与旧参
     'browser_show',
     'browser_scratch',
     'browser_capture',
+    'browser_devtools',
     'browser_collect',
     'browser_download',
     'browser_close',
     'browser_status',
   ]
-  assert.equal(tools.size, 19)
+  assert.equal(tools.size, 20)
   assert.deepEqual([...tools.keys()].sort(), expectedNames.slice().sort())
 
   for (const [name, tool] of tools) {
@@ -924,6 +939,7 @@ test('tools.js 注册 19 个工具、schema 合法、并发安全分类与旧参
     browser_show: ['action', 'visibility', 'tab', 'restoreTabs'],
     browser_scratch: ['action', 'jobId', 'path', 'maxChars'],
     browser_capture: ['tab', 'selector', 'keep', 'maxChars'],
+    browser_devtools: ['action', 'tab', 'selector', 'jobId', 'clean', 'keep', 'keepLinks', 'dropScripts', 'dropStyles', 'maxChars'],
     browser_download: ['tab', 'url', 'ref', 'selector', 'path'],
   }
   for (const [name, keys] of Object.entries(oldKeys)) {
@@ -943,6 +959,7 @@ test('tools.js 注册 19 个工具、schema 合法、并发安全分类与旧参
     ['browser_show', {}, true],
     ['browser_scratch', {}, true],
     ['browser_capture', {}, true],
+    ['browser_devtools', {}, true],
     ['browser_screenshot', {}, true],
     ['browser_status', {}, true],
     ['browser_open', {}, false],

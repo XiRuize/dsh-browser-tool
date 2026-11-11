@@ -2,6 +2,20 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。本文件只记录真实发生或明确标记为「进行中」的变更，不把计划写成已发布事实。
 
+## [未发布] — 0.7.0（F12 式前端工作流，代码已落地）
+
+### 新增
+
+- **`browser_devtools`**：`capture` 把页面 HTML、内联样式、样式表链接、脚本清单、meta 写入暂存区并生成清单；`clean` 去掉脚本/样式/注释/内联事件/埋点属性，输出干净 HTML + 文本；`manifest` 看文件清单；`clear` 删除暂存。
+- **`lib/devtools.js`**：`collectFrontendInPage`（页面内采集）、`cleanFrontend`（纯函数清洗，返回各类删除计数）、`captureFrontend`（落盘 + 清单）。
+
+### 变更
+
+- `ScratchStore.put` 保留原扩展名（`page.html`、`cleaned.html`），无扩展名才补 `.raw`。
+
+### 测试
+
+- 单测 19/19；e2e 82 assertions（新增 devtools capture/clean/manifest/clear 全链路）。
 ## [未发布] — 0.6.0（暂存区 + 工作页池，代码已落地）
 
 ### 新增

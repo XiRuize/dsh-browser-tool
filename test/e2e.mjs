@@ -256,6 +256,18 @@ try {
   const scratchStats = await call('browser_scratch', { action: 'stats' })
   check(Array.isArray(scratchStats.jobs), 'browser_scratch stats 返回任务列表')
 
+  await call('browser_open', { url: `${base}/`, tab: mainTab })
+  const dev = await call('browser_devtools', { action: 'capture', tab: mainTab, clean: true, keep: true, maxChars: 2000 })
+  check(Boolean(dev.jobId) && dev.files.length >= 2, 'devtools capture 写入暂存区')
+  check(dev.cleaned && dev.cleaned.stats.scripts >= 1, 'devtools capture 去掉脚本')
+  check(String(dev.cleaned?.text || '').length > 0, 'devtools capture 返回清洗正文')
+  const devManifest = await call('browser_devtools', { action: 'manifest', jobId: dev.jobId })
+  check(devManifest.files.some(file => file.name.endsWith('cleaned.html')), 'devtools manifest 含 cleaned.html')
+  const devClean = await call('browser_devtools', { action: 'clean', jobId: dev.jobId })
+  check(Boolean(devClean.stats) && typeof devClean.text === 'string', 'devtools clean 可二次清洗')
+  const devClear = await call('browser_devtools', { action: 'clear', jobId: dev.jobId })
+  check(devClear.cleared === dev.jobId, 'devtools clear 删除暂存')
+
   step = 'browser_collect cursor 续跑（120 URL）'
   const collectUrls = Array.from({ length: 120 }, (_, index) => `${base}/detail?n=${index + 1}`)
   const collectArgs = {
