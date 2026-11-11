@@ -1,6 +1,6 @@
 # 工具参考（tools）
 
-当前工具面共 14 个工具：10 个基线工具名 + `browser_observe`、`browser_inspect`、`browser_workspace`、`browser_status`。参数、默认值与返回结构以 `lib/tools.js` 及各实现模块为准；真实 Edge 端到端验收仍待 install-verify 完成（见 [`install-verification.md`](install-verification.md)）。
+当前工具面共 20 个工具（基线工具 + `browser_observe`、`browser_inspect`、`browser_workspace`、`browser_show`、`browser_fetch`、`browser_forum`、`browser_capture`、`browser_scratch`、`browser_devtools`、`browser_status`）。参数、默认值与返回结构以 `lib/tools.js` 及各实现模块为准；真实 Edge 端到端验收仍待 install-verify 完成（见 [`install-verification.md`](install-verification.md)）。
 
 ## 通用约定
 

@@ -2,11 +2,11 @@
 
 给 [DeepSeek Harness](https://github.com/deepseek-ai) 的浏览器操作插件：一个可长期驻留、默认后台静默的真实 Edge / Chromium 浏览器，加上面向「浏览 → 定位 → 提取 → 存证 → 批处理」的工具面。
 
-![status](https://img.shields.io/badge/status-0.2.0%20code%20ready%2C%20E2E%20pending-yellow)
+![status](https://img.shields.io/badge/status-0.7.1%20published-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![runtime](https://img.shields.io/badge/runtime-Node.js%2020%2B%20%7C%2022-339933)
 
-> **版本状态**：`0.3.0` 的代码已落地（20 个工具、分层观测、工作区与恢复），但**真实 Edge 端到端验收仍待 install-verify 完成**，本仓库也尚未发布到 GitHub。已交付的基线是 `0.1.0`（详见 [`CHANGELOG.md`](CHANGELOG.md)）。
+> **版本状态**：`0.7.1` 已发布到 GitHub（20 个工具：分层观测、工作区、静默/非静默切换、HTTP 快通道、QQ 论坛分页、临时暂存区与 F12 前端工作流）。`0.1.0` 是初始基线，版本演进见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ## 定位
 
@@ -234,7 +234,7 @@ browser-tool/
 - Canvas、封闭 Shadow DOM、纯视觉内容无法可靠结构化，用截图与网络兜底。
 - 多个子代理共享同一 Chromium context，标签页与内存需要上限和回收。
 - Windows 下 `offscreen` 窗口仍可能出现在任务栏；默认用 `headless`。
-- 0.2.0 的代码已落地，但真实 Edge E2E（headless、恢复、多代理、续跑）仍待 install-verify 验收；接口以 [`docs/MODULE-CONTRACT.md`](docs/MODULE-CONTRACT.md) 为准。
+- 工具面以 20 个 `browser_*` 工具为准；接口契约见 [`docs/MODULE-CONTRACT.md`](docs/MODULE-CONTRACT.md)，版本演进见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ## 验证命令
 

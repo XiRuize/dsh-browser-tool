@@ -60,3 +60,7 @@ jobs:
       - name: Note
         if: ${{ hashFiles('test/unit.mjs') == '' }}
         run: echo "test/unit.mjs not present yet; skipping browser-free unit tests."
+
+      - name: Docs consistency
+        if: ${{ hashFiles('test/docs.mjs') != '' }}
+        run: node test/docs.mjs

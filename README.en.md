@@ -2,11 +2,11 @@
 
 Browser-operation plugin for [DeepSeek Harness](https://github.com/deepseek-ai): a long-lived, silent-by-default real Edge / Chromium browser plus a tool surface for *observe → locate → act → verify → extract → archive*.
 
-![status](https://img.shields.io/badge/status-0.2.0%20code%20ready%2C%20E2E%20pending-yellow)
+![status](https://img.shields.io/badge/status-0.7.1%20published-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![runtime](https://img.shields.io/badge/runtime-Node.js%2020%2B%20%7C%2022-339933)
 
-> **Status**: the `0.2.0` code is in place (14 tools, layered observation, workspaces, recovery), but **real Edge end-to-end acceptance is still pending install-verify**, and this repository has not been published to GitHub. `0.1.0` is the delivered baseline.
+> **Status**: `0.7.1` is published on GitHub (20 tools: layered observation, workspaces, silent/visible switching, HTTP fast path, QQ forum pagination, scratch store and an F12-style frontend workflow). `0.1.0` was the initial baseline; see [`CHANGELOG.md`](CHANGELOG.md).
 
 ## What it is
 
@@ -52,7 +52,7 @@ The plugin exports no `Config` / `ConfigSchema`; the Loader passes raw config to
 
 ## Tools
 
-`browser_open`, `browser_snapshot` (**structure-layer compatibility alias** of `browser_observe`), `browser_observe`, `browser_inspect`, `browser_act`, `browser_extract`, `browser_screenshot`, `browser_tabs`, `browser_workspace`, `browser_network`, `browser_collect`, `browser_download`, `browser_status`, `browser_close`.
+`browser_open`, `browser_snapshot`, `browser_observe`, `browser_inspect`, `browser_act`, `browser_extract`, `browser_screenshot`, `browser_tabs`, `browser_workspace`, `browser_network`, `browser_fetch`, `browser_forum`, `browser_capture`, `browser_scratch`, `browser_devtools`, `browser_collect`, `browser_download`, `browser_show`, `browser_status`, `browser_close`.
 
 All 14 tools are implemented in code. Real Edge end-to-end acceptance remains pending install-verify — see [`docs/install-verification.md`](docs/install-verification.md).
 

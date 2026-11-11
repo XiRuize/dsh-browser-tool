@@ -33,7 +33,7 @@ flowchart LR
     Act["act / extract"]
     Net["network / collect"]
     Art["ArtifactStore + manifest"]
-    Tools["tools.js: 14 个工具"]
+    Tools["tools.js: 20 个工具"]
   end
 
   subgraph External["外部"]

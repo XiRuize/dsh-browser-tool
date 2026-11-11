@@ -1,6 +1,6 @@
 {
   "name": "@future/dsh-browser-tool",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "private": true,
   "type": "module",
   "description": "Silent, long-running browser runtime for DeepSeek Harness: persistent login, headless/offscreen visibility, watchdog recovery, snapshot refs, layered extraction, network capture, batch collection and multi-agent workspaces.",
@@ -36,6 +36,13 @@
   ],
   "dependencies": {
     "playwright-core": "1.64.1"
+  },
+  "scripts": {
+    "test": "node test/unit.mjs",
+    "test:e2e": "node test/e2e.mjs",
+    "verify:docs": "node test/docs.mjs",
+    "bench": "node test/bench.mjs",
+    "bench:forum": "node test/bench-forum.mjs pilot 100 3"
   },
   "dsh": {
     "bundle": {

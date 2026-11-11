@@ -2,6 +2,14 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。本文件只记录真实发生或明确标记为「进行中」的变更，不把计划写成已发布事实。
 
+## [未发布] — 0.7.1（文档与仓库完善）
+
+### 变更
+
+- 文档与工具清单同步：README、README.en、docs/tools.md、architecture 统一为 **20 个工具**，状态徽章更新为已发布版本。
+- 新增 npm 脚本：`test`、`test:e2e`、`verify:docs`、`bench`、`bench:forum`。
+- 新增 `test/docs.mjs` 文档一致性检查（版本号、工具数、CHANGELOG 小节、npm scripts），并接入 GitHub Actions CI。
+- 清理 `scripts/qq-forum/` 下的一次性调试脚本；本地自动评论脚本加入 `.gitignore`，不再入库。
 ## [未发布] — 0.7.0（F12 式前端工作流，代码已落地）
 
 ### 新增
