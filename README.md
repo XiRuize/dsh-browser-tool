@@ -2,11 +2,11 @@
 
 给 [DeepSeek Harness](https://github.com/deepseek-ai) 的浏览器操作插件：一个可长期驻留、默认后台静默的真实 Edge / Chromium 浏览器，加上面向「浏览 → 定位 → 提取 → 存证 → 批处理」的工具面。
 
-![status](https://img.shields.io/badge/status-0.7.2%20published-brightgreen)
+![status](https://img.shields.io/badge/status-0.7.3%20published-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![runtime](https://img.shields.io/badge/runtime-Node.js%2020%2B%20%7C%2022-339933)
 
-> **版本状态**：`0.7.2` 已发布到 GitHub（20 个工具：分层观测、工作区、静默/非静默切换、HTTP 快通道、QQ 论坛分页、临时暂存区与 F12 前端工作流）。`0.1.0` 是初始基线，版本演进见 [`CHANGELOG.md`](CHANGELOG.md)。
+> **版本状态**：`0.7.3` 已发布到 GitHub（20 个工具：分层观测、工作区、静默/非静默切换、HTTP 快通道、QQ 论坛分页、临时暂存区与 F12 前端工作流）。`0.1.0` 是初始基线，版本演进见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ## 定位
 

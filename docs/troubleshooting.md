@@ -165,3 +165,24 @@ plugin_manager action=list_plugins
 5. 是否为 `launch` / `cdp`，`visibility` 是什么。
 
 不要附带真实账号 Cookie、手机号、身份证等敏感数据。
+## 启动失败：exitCode=21 / Target page, context or browser has been closed
+
+**现象**：调用任意 `browser_*` 时报 `browserType.launchPersistentContext: Target page, context or browser has been closed`，
+Playwright 日志里能看到 `<process did exit: exitCode=21>`，随后提示「未找到可用的 Edge/Chromium」。
+
+**原因**：上一次崩溃、强杀或脚本异常退出后，仍有 msedge 进程占着 `userDataDir`（或残留 `lockfile`），
+新进程拿不到 profile，Chromium 以 21 退出。错误文本里没有 `profile/locked` 字样，容易被误判成「没装 Edge」。
+
+**处理**
+
+- `0.7.3+` 已内置自愈：启动前检查 `lockfile` 与同 profile 的 msedge 进程并清理；启动失败时在 Windows 上清残留后重试（最多 3 次）。
+- 仍失败时手动清理（只清这个 profile，不影响你自己的浏览器）：
+
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" |
+  Where-Object { $_.CommandLine -like '*\.dsh\browser-tool\profile*' } |
+  ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+Remove-Item "$env:USERPROFILE\.dsh\browser-tool\profile\lockfile" -Force -ErrorAction SilentlyContinue
+```
+
+- 回归验证：`$env:DSH_BROWSER_HEAL='1'; node test/heal.mjs`

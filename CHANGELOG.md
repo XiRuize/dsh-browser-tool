@@ -2,6 +2,17 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。本文件只记录真实发生或明确标记为「进行中」的变更，不把计划写成已发布事实。
 
+## [未发布] — 0.7.3（启动自愈修复）
+
+### 修复
+
+- **exitCode=21 / "Target page, context or browser has been closed"**：根因是上次崩溃或强杀留下 msedge 进程占着 `userDataDir`。此前只在错误文本命中 `profile/locked` 时才清理，而 Playwright 这条错误文本不含这些词，导致重试仍失败。
+- 现在：启动前预检 `lockfile` 与同 profile 的 msedge 进程并清理；启动失败时在 Windows 上无条件清残留后再重试，最多 3 次。
+- 错误提示补充 exitCode=21 的排查建议（结束占用进程 / 重启系统）。
+
+### 测试
+
+- 新增 `test/heal.mjs`（Windows、`DSH_BROWSER_HEAL=1`）：先起一个占用 profile 的残留 Edge，再验证启动自愈成功。
 ## [未发布] — 0.7.2（仓库清理）
 
 ### 变更
