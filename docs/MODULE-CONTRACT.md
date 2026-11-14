@@ -30,6 +30,7 @@
   visibility: 'headless' | 'offscreen' | 'window',
   locale, timezoneId,
   actionTimeoutMs, navigationTimeoutMs,
+  launchTimeoutMs, launchDeadlineMs,
   snapshotMaxChars, extractMaxChars,
   collectConcurrency, collectDelayMs, collectRenderWaitMs,
   idleCloseMs, watchdogIntervalMs, autoRelaunch,
@@ -39,7 +40,7 @@
 }
 ```
 
-硬性默认值：`visibility='headless'`、`idleCloseMs=0`、`watchdogIntervalMs=30000`、`autoRelaunch=true`、`maxTabs=24`、`allowEval=false`、`allowAbsoluteArtifacts=false`。`headless` 只作为兼容别名，最终看 `visibility`。
+硬性默认值：`visibility='headless'`、`idleCloseMs=0`、`watchdogIntervalMs=30000`、`autoRelaunch=true`、`maxTabs=24`、`allowEval=false`、`allowAbsoluteArtifacts=false`、`launchTimeoutMs=30000`、`launchDeadlineMs=55000`。`headless` 只作为兼容别名，最终看 `visibility`。启动总预算应小于工具层超时（快照 45000、截图/网络 60000、`browser_open` 90000），否则调用会先被工具层中止而底层启动仍在继续。
 
 ## `BrowserHost`（`lib/host.js`）
 

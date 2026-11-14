@@ -178,7 +178,7 @@ flowchart TD
 
 ## 可观测性
 
-- `browser_status`：`{ loaded, connected, mode, visibility, browserVersion, pages, launchedAt, restartCount, lastError, lastErrorAt, state, watchdogActive, idleCloseMs, workspaces, tabs, locks }`。
+- `browser_status`：`{ loaded, connected, mode, visibility, browserVersion, pages, launchedAt, restartCount, lastError, lastErrorAt, cleanupWarning, state, watchdogActive, idleCloseMs, workspaces, tabs, locks }`。
 - 结构化日志：启动、恢复、动作失败、锁等待、产物写入。
 - 工具错误带「下一步」提示，例如「配置目录被占用，请关闭上一个浏览器进程」。
 

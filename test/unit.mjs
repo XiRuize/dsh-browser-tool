@@ -19,6 +19,7 @@ import { cleanFrontend } from '../lib/devtools.js'
 import { ScratchStore } from '../lib/scratch.js'
 import { registerBrowserTools } from '../lib/tools.js'
 import { BrowserManager } from '../lib/manager.js'
+import { isRecoverableError, launchHint } from '../lib/host.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const tmpRoot = path.join(here, '.tmp')
@@ -195,6 +196,78 @@ test('resolveConfig 硬性默认值与 headless 兼容映射', () => {
   assert.equal(resolveConfig({ visibility: 'offscreen' }).visibility, 'offscreen')
   assert.equal(resolveConfig({ visibility: '不存在的值', headless: false }).visibility, 'window')
   assert.equal(resolveConfig({ visibility: '不存在的值' }).visibility, 'headless')
+})
+
+test('resolveConfig 启动预算默认值、上下界与工具层超时对齐', () => {
+  const config = resolveConfig({})
+  assert.equal(config.launchTimeoutMs, 30000)
+  assert.equal(config.launchDeadlineMs, 55000)
+  // 必须比常见工具超时（快照 45s / 截图与网络 60s / browser_open 90s）更早结束，
+  // 否则调用会被工具层先中止，而底层 launch 还在跑。
+  assert.ok(config.launchDeadlineMs < 60000, '总预算应小于 60s 工具超时')
+  assert.ok(config.launchDeadlineMs <= 90000, '总预算应小于 browser_open 的 90s')
+  assert.ok(config.launchTimeoutMs <= config.launchDeadlineMs, '单次超时不应超过总预算')
+
+  assert.equal(resolveConfig({ launchTimeoutMs: 999999 }).launchTimeoutMs, 180000)
+  assert.equal(resolveConfig({ launchTimeoutMs: 1 }).launchTimeoutMs, 5000)
+  assert.equal(resolveConfig({ launchTimeoutMs: '不是数字' }).launchTimeoutMs, 30000)
+  assert.equal(resolveConfig({ launchDeadlineMs: 999999 }).launchDeadlineMs, 300000)
+  assert.equal(resolveConfig({ launchDeadlineMs: 1 }).launchDeadlineMs, 10000)
+})
+
+// 真实报错样本（2026-11-14 22:53 实机抓到）：启动超时的 Call log 里必然带 msedge.exe 路径。
+const LAUNCH_TIMEOUT_MESSAGE =
+  '浏览器启动失败：browserType.launchPersistentContext: Timeout 180000ms exceeded.\n' +
+  'Call log:\n' +
+  '  - <launching> C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe ' +
+  '--disable-field-trial-config --headless --user-data-dir=C:\\Users\\x\\.dsh\\browser-tool\\profile ' +
+  '--remote-debugging-pipe about:blank\n' +
+  '  - <launched> pid=27252\n' +
+  '  - [pid=27252][err] [27252:35660:1114/225012.869:ERROR:components\\edge_auth\\edge_auth_errors.cc:540] ' +
+  'EDGE_IDENTITY: Get Default OS Account failed'
+
+test('launchHint：启动超时不得误报「未找到可用的 Edge」', () => {
+  const hint = launchHint(LAUNCH_TIMEOUT_MESSAGE)
+  assert.match(hint, /启动超时/)
+  assert.match(hint, /占用/)
+  assert.doesNotMatch(hint, /未找到可用的 Edge/)
+  assert.doesNotMatch(hint, /请安装 Microsoft Edge/)
+})
+
+test('launchHint：只有真正缺可执行文件时才提示安装 Edge', () => {
+  const missing = launchHint(
+    "browserType.launchPersistentContext: Executable doesn't exist at C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+  )
+  assert.match(missing, /未找到可用的 Edge/)
+
+  const distribution = launchHint("Chromium distribution 'msedge' is not found at C:\\Program Files (x86)")
+  assert.match(distribution, /未找到可用的 Edge/)
+})
+
+test('launchHint：exitCode=21 与 profile 占用各自给出对应建议', () => {
+  const exit21 = launchHint(
+    '浏览器启动失败：browserType.launchPersistentContext: Target page, context or browser has been closed\n' +
+      'Browser logs:\n<launching> C:\\msedge.exe --user-data-dir=C:\\p\n<process did exit: exitCode=21, signal=null>',
+  )
+  assert.match(exit21, /exitCode=21/)
+  assert.match(exit21, /msedge/)
+
+  const singleton = launchHint(
+    "browserType.launchPersistentContext: ProcessSingleton: C:\\Users\\x\\.dsh\\browser-tool\\profile is already in use",
+  )
+  assert.match(singleton, /配置目录可能被另一个/)
+  assert.doesNotMatch(singleton, /未找到可用的 Edge/)
+})
+
+test('isRecoverableError：启动超时算可恢复，未知错误不算', () => {
+  assert.equal(isRecoverableError(new Error('Timeout 180000ms exceeded.')), true)
+  assert.equal(isRecoverableError(LAUNCH_TIMEOUT_MESSAGE), true)
+  assert.equal(isRecoverableError(new Error('Target page, context or browser has been closed')), true)
+  assert.equal(isRecoverableError(new Error('browser has been closed')), true)
+  assert.equal(isRecoverableError(new Error('ECONNRESET')), true)
+  // 参数/配置类错误不该触发自愈重试。
+  assert.equal(isRecoverableError(new Error('mode=cdp 时必须配置 cdpUrl')), false)
+  assert.equal(isRecoverableError(new Error('visibility 只能是 headless / offscreen / window')), false)
 })
 
 test('resolveConfig 展开 ~、$DSH_HOME 与环境变量', () => {

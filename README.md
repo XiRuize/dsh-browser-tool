@@ -2,11 +2,11 @@
 
 给 [DeepSeek Harness](https://github.com/deepseek-ai) 的浏览器操作插件：一个可长期驻留、默认后台静默的真实 Edge / Chromium 浏览器，加上面向「浏览 → 定位 → 提取 → 存证 → 批处理」的工具面。
 
-![status](https://img.shields.io/badge/status-0.7.3%20published-brightgreen)
+![status](https://img.shields.io/badge/status-0.7.4%20ready-orange)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![runtime](https://img.shields.io/badge/runtime-Node.js%2020%2B%20%7C%2022-339933)
 
-> **版本状态**：`0.7.3` 已发布到 GitHub（20 个工具：分层观测、工作区、静默/非静默切换、HTTP 快通道、QQ 论坛分页、临时暂存区与 F12 前端工作流）。`0.1.0` 是初始基线，版本演进见 [`CHANGELOG.md`](CHANGELOG.md)。
+> **版本状态**：`0.7.4` 已就绪（本地修复并通过 unit / docs / e2e 82 assertions / heal / locked-hint 回归，尚未推送到 GitHub）。20 个工具：分层观测、工作区、静默/非静默切换、HTTP 快通道、QQ 论坛分页、临时暂存区与 F12 前端工作流。`0.1.0` 是初始基线，版本演进见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ## 定位
 
@@ -104,6 +104,8 @@ C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
 | `timezoneId` | `Asia/Shanghai` | 时区 |
 | `actionTimeoutMs` | `15000` | 单步动作超时 |
 | `navigationTimeoutMs` | `45000` | 页面导航超时 |
+| `launchTimeoutMs` | `30000` | 单次浏览器启动超时（`launchPersistentContext`） |
+| `launchDeadlineMs` | `55000` | 启动+全部重试的总预算，应小于工具层超时（快照 45s / 截图 60s / `browser_open` 90s） |
 | `navigateSettleMs` | `120` | 导航后短沉降，替代固定 sleep(450) |
 | `navigateWaitSelector` | 空 | 导航后等待某选择器出现（适合必须水合的 SPA） |
 | `collectRetries` | `2` | 单条导航/请求重试次数 |

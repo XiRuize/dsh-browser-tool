@@ -2,6 +2,22 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。本文件只记录真实发生或明确标记为「进行中」的变更，不把计划写成已发布事实。
 
+## [未发布] — 0.7.4（启动预算与错误提示修复）
+
+### 修复
+
+- **启动超时被误报成「未找到可用的 Edge/Chromium」**：任何启动失败的 Browser logs 都会打印 `...\msedge.exe --...` 命令行，旧 `launchHint` 用裸 `msedge` 判定「没装浏览器」，于是 `Timeout ... exceeded` 一律被解释成「请安装 Microsoft Edge」，智能体据此认为插件不可用。现在只有在 `Executable doesn't exist` / `Chromium distribution ... is not found` / `ENOENT` 时才报缺浏览器，并新增独立的「启动超时」提示（指向 profile 占用与安全软件拦截）。
+- **启动超时不再算可恢复错误**：`isRecoverableError` 增加 `Timeout \d+ms exceeded`，超时也会先清理残留 profile 再重试；此前直接抛错，残留进程无人清理，后续每次调用继续失败。
+- **启动超时与工具超时对齐**：`launchPersistentContext` 此前未传 `timeout`，用 Playwright 默认 180s，远超工具层超时（快照 45s、截图 60s、`browser_open` 90s），导致「工具已失败、底层还在启动、稍后又连上」的状态矛盾。新增 `launchTimeoutMs`（默认 30000）与 `launchDeadlineMs`（默认 55000，含全部重试），保证在工具超时前返回确定的错误。
+- **自愈失败不再静默**：`#prepareProfile` 的 PowerShell 探测/清理失败会记入 `cleanupWarning`，并随 `browser_status` 输出「启动前清理告警」，避免「自愈看起来开了但实际没执行」。
+
+### 测试
+
+- 单测新增 5 条：启动预算默认值与上下界、超时/Call log 含 msedge 时不误报缺浏览器、真缺可执行文件才提示安装、exitCode=21 与 profile 占用分别给出建议、`isRecoverableError` 的恢复判定。
+- 实机验证：用 junction 让占位进程的命令行路径与配置路径不一致，避免自愈直接杀掉占位进程，确认错误在 4.5s 内返回且提示为「配置目录可能被另一个 Edge/Chrome 进程占用」。
+- 新增 `test/locked-hint.mjs`（Windows、`DSH_BROWSER_LOCKCHECK=1`，npm `test:locked`）把上面的实机验证固化为回归：占位 profile → 断言提示指向占用、不误报缺浏览器、且 60s 内返回。
+- `test/heal.mjs` 在临时 profile 上回归通过（HEAL OK 5.9s）。
+
 ## [未发布] — 0.7.3（启动自愈修复）
 
 ### 修复

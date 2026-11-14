@@ -600,6 +600,7 @@ F12 式前端工作流：抓取 → 暂存 → 清洗。
   "restartCount": 0,
   "lastError": null,
   "lastErrorAt": null,
+  "cleanupWarning": null,
   "state": "ready",
   "watchdogActive": true,
   "idleCloseMs": 0,

@@ -168,14 +168,14 @@ plugin_manager action=list_plugins
 ## 启动失败：exitCode=21 / Target page, context or browser has been closed
 
 **现象**：调用任意 `browser_*` 时报 `browserType.launchPersistentContext: Target page, context or browser has been closed`，
-Playwright 日志里能看到 `<process did exit: exitCode=21>`，随后提示「未找到可用的 Edge/Chromium」。
+Playwright 日志里能看到 `<process did exit: exitCode=21>`。
 
 **原因**：上一次崩溃、强杀或脚本异常退出后，仍有 msedge 进程占着 `userDataDir`（或残留 `lockfile`），
 新进程拿不到 profile，Chromium 以 21 退出。错误文本里没有 `profile/locked` 字样，容易被误判成「没装 Edge」。
 
 **处理**
 
-- `0.7.3+` 已内置自愈：启动前检查 `lockfile` 与同 profile 的 msedge 进程并清理；启动失败时在 Windows 上清残留后重试（最多 3 次）。
+- `0.7.4+` 已内置自愈：启动前检查 `lockfile` 与同 profile 的 msedge 进程并清理；启动失败时在 Windows 上清残留后重试（最多 3 次）。
 - 仍失败时手动清理（只清这个 profile，不影响你自己的浏览器）：
 
 ```powershell
@@ -186,3 +186,22 @@ Remove-Item "$env:USERPROFILE\.dsh\browser-tool\profile\lockfile" -Force -ErrorA
 ```
 
 - 回归验证：`$env:DSH_BROWSER_HEAL='1'; node test/heal.mjs`
+- 提示文案回归：`$env:DSH_BROWSER_LOCKCHECK='1'; node test/locked-hint.mjs`（断言提示指向「配置目录被占用」而不是「没装 Edge」）
+
+## 启动超时：Timeout NNNms exceeded
+
+**现象**：`browserType.launchPersistentContext: Timeout 30000ms exceeded.`（阈值由 `launchTimeoutMs` 决定），
+Playwright 日志里已经有 `<launched> pid=...`，但随后没有建立调试连接。
+`0.7.3` 及更早版本会把它误报成「未找到可用的 Edge/Chromium：请安装 Microsoft Edge」——
+**看到「请安装 Edge」但 `Test-Path` 明明存在时，就是撞到了这个误判**。
+
+**原因**：进程起来了但 `--remote-debugging-pipe` 迟迟连不上。最常见是 `userDataDir` 被残留 msedge 进程占着
+（此时新进程不会立刻退出，而是挂在 singleton 等待上），其次是被安全软件 / 受控文件夹访问 / 受限沙箱拦截。
+
+**处理**
+
+1. 看 `browser_status` 的「启动前清理告警」：有告警说明自愈用的 PowerShell 探测被限制了，需要手动清理。
+2. 手动结束占用进程（同上一节的命令），再重试。
+3. 缩小启动预算便于快速失败：`launchTimeoutMs: 20000`、`launchDeadlineMs: 40000`（两者都必须小于工具超时 90000）。
+4. 需要复用已有登录浏览器时，改用 `mode: cdp` + `cdpUrl`，绕开启动环节。
+
