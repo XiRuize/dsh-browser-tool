@@ -2,7 +2,7 @@
 
 Browser-operation plugin for [DeepSeek Harness](https://github.com/deepseek-ai): a long-lived, silent-by-default real Edge / Chromium browser plus a tool surface for *observe → locate → act → verify → extract → archive*.
 
-![status](https://img.shields.io/badge/status-0.8.1%20dev-brightgreen)
+![status](https://img.shields.io/badge/status-0.8.2%20dev-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![runtime](https://img.shields.io/badge/runtime-Node.js%2020%2B%20%7C%2022-339933)
 
@@ -62,6 +62,8 @@ browser_fetch { url: "https://api.example.com/quote" }
 ## Highlights
 
 - **Silent by default**: `visibility=headless`; never calls `page.bringToFront()` unless explicitly requested. Switch to `window` only for human login or CAPTCHA.
+  CAPTCHAs are classified by `lib/human-check.js` and reported as `humanCheck` (with the exact next step); after a
+  human solves it, call `browser_act({action:"waitForHuman"})` to wait for it to disappear — the tool waits, never answers.
 - **Long-running**: `idleCloseMs=0`, 30 s watchdog, auto-relaunch after disconnect, bounded launch budget (30 s per attempt / 55 s total), persistent login profile.
 - **Multi-subagent workspaces**: `browser_workspace` with `reader` / `writer` roles, per-tab read/write locks, leases, handoff notes, stable tab IDs.
 - **Unified read**: `browser_read` covers layers, deep inspection, extraction and screenshots; scoped by `selector` / `ref`, `detail=compact` keeps replies small and spills full content to `savedPath`.

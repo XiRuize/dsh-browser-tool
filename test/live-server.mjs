@@ -156,6 +156,22 @@ export async function startLocalServer() {
         '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>安全验证</title></head><body><h1>请完成安全验证</h1><p>请拖动滑块完成验证</p></body></html>',
       )
     }
+    // 带第三方验证组件的页面：用来验证 humanCheck 识别与 waitForHuman 交接。
+    if (url.pathname === '/captcha') {
+      return html(
+        response,
+        '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>安全验证</title></head><body>' +
+          '<h1>请完成安全验证</h1>' +
+          '<iframe src="/recaptcha/api2/anchor?k=test" width="304" height="78" title="recaptcha"></iframe>' +
+          '</body></html>',
+      )
+    }
+    if (url.pathname === '/recaptcha/api2/anchor') {
+      return html(
+        response,
+        '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>reCAPTCHA</title></head><body>protected by reCAPTCHA</body></html>',
+      )
+    }
     return html(response, page)
   })
 

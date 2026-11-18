@@ -220,6 +220,25 @@ try {
   check(verifySnap.snapshot?.captcha === true, '主页面验证拦截页仍会提示')
   await call('browser_open', { url: `${base}/`, tab: mainTab })
 
+  step = '验证码交接：识别类型 + waitForHuman 只等不代答'
+  const captchaOpen = await call('browser_open', { url: `${base}/captcha`, tab: mainTab })
+  check(captchaOpen.humanCheck?.detected === true, 'open 返回 humanCheck')
+  check(captchaOpen.humanCheck?.kind === 'recaptcha', 'humanCheck 认出 reCAPTCHA')
+  check(String(captchaOpen.message || '').includes('reCAPTCHA'), 'message 里点名验证类型')
+  check(
+    Array.isArray(captchaOpen.humanCheck?.steps) && captchaOpen.humanCheck.steps.some(s => s.includes('waitForHuman')),
+    'humanCheck 给出 waitForHuman 下一步',
+  )
+  const stillStuck = await call('browser_act', { action: 'waitForHuman', timeoutMs: 3000, tab: mainTab })
+  check(stillStuck.verify?.ok === false, '验证还在时 waitForHuman 不算成功')
+  check(stillStuck.verify?.humanCheck?.resolved === false, 'waitForHuman 报 resolved=false')
+  check(/不要尝试自动绕过|人工完成/.test(String(stillStuck.message || '')), 'waitForHuman 提示不要自动绕过')
+
+  await call('browser_open', { url: `${base}/`, tab: mainTab })
+  const cleared = await call('browser_act', { action: 'waitForHuman', timeoutMs: 5000, tab: mainTab })
+  check(cleared.verify?.ok === true, '无验证码时 waitForHuman 直接通过')
+  check(cleared.verify?.humanCheck?.resolved === true, 'waitForHuman 报 resolved=true')
+
   step = 'browser_batch 多步动作 + extract（一次调用）'
   const batched = await call('browser_act', {
     label: 'E2E 批量',

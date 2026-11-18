@@ -97,7 +97,7 @@
 
 | 参数 | 类型 | 默认 | 说明 |
 |---|---|---|---|
-| `action` | string | 单步必填 | `click` / `type` / `press` / `scroll` / `select` / `check` / `uncheck` / `hover` / `drag` / `upload` / `back` / `forward` / `reload` / `wait` / `waitFor` / `dialog`；传 `steps` 时忽略 |
+| `action` | string | 单步必填 | `click` / `type` / `press` / `scroll` / `select` / `check` / `uncheck` / `hover` / `drag` / `upload` / `back` / `forward` / `reload` / `wait` / `waitFor` / `waitForHuman` / `dialog`；传 `steps` 时忽略 |
 | `steps` | array | — | 多步模式：1–50 步，每步 `{action, label?, url?, ref?, selector?, text?, value?, key?, verify?, mode?, itemSelector?, fields?}`；action 支持 act 全部动作 + `extract` + `goto` |
 | `stopOnError` | boolean | `true` | steps 模式某步失败是否立即停止 |
 | `options` | object | — | 附加参数：button/clickCount/modifiers/state/urlPattern/responseUrl/exact/files/dialog/from/to/drag/waitFor |
@@ -152,8 +152,14 @@
 - 回读比较容忍纯空白差异：完全一致为 `exact`，仅空白/换行不同视为成功并在 `notes` 注明，不再误报「核验未通过」。
 - 文本定位命中多个元素时（`target.matchCount > 1`），默认不再盲取第 1 个：按「弹出层（listbox/menu/option）内 > 可点击标签 > 面积更小 > 在视口内」排序，原因写入 `target.pickReason`（`弹出层内` / `可点击元素` / `面积更小`）。显式传 `nth` 或 `container` 时以调用方为准。
 
-错误语义：引用过期 → 「ref 已失效，请重新快照」；元素不可见/被遮挡 → 返回 Playwright 原因 + 建议滚动或 `waitFor`；reader 角色 → 「当前工作区角色为 reader，不能执行写操作」；锁超时 → 明确提示；`upload` 文件不存在 → 明确路径错误。
+人机验证交接（0.8.2 起，边界见 `SECURITY.md`：不识别答案、不点击验证码、不做 stealth）：
 
+- 任何动作结束后都会做一次只读探测（一次页面内求值）；命中就返回 `humanCheck: {detected, kind, label, note, evidence, canSeeWindow, visibility, steps, waitTool, waitAction}`，并把「该交给人了」写进 `message`。`kind` 取值：`recaptcha` / `hcaptcha` / `cloudflare-turnstile` / `geetest` / `aliyun` / `tencent` / `slider` / `unknown`。
+- `browser_open` 命中同一个对象；`snapshot.humanCheck` 给出类型与证据（不含步骤）。
+- `action: "waitForHuman"`（`timeoutMs` 默认 120000，上限 600000）只轮询「验证是否消失」，不代答：返回 `verify.ok`（通过）、`verify.humanCheck = {resolved, attempts, elapsedMs, lastKind, lastLabel}`。超时仍未消失时 `verify.ok=false`，并提示先确认窗口在人眼前或停下报给用户。
+- headless 下人看不到窗口，`steps` 会先要求 `browser_show({action:"set", visibility:"window"})`（重启但保留登录态）再 `browser_open` 回原 URL；`window`/`offscreen` 模式下 `steps` 直接要求 `browser_show({action:"show"})`。
+
+错误语义：引用过期 → 「ref 已失效，请重新快照」；元素不可见/被遮挡 → 返回 Playwright 原因 + 建议滚动或 `waitFor`；reader 角色 → 「当前工作区角色为 reader，不能执行写操作」；锁超时 → 明确提示；`upload` 文件不存在 → 明确路径错误。
 ---
 
 ## `browser_paginate`

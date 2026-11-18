@@ -22,6 +22,7 @@ import { BrowserManager } from '../lib/manager.js'
 import { isRecoverableError, launchHint } from '../lib/host.js'
 import { BATCH_ACTIONS, normalizeSteps } from '../lib/batch.js'
 import { compareFillText, pickTextMatch, squashWhitespace } from '../lib/act.js'
+import { classifyHumanCheck, describeHumanCheck } from '../lib/human-check.js'
 import { ContentCache, cacheableResponse, stableStringify } from '../lib/cache.js'
 import { hudText, shouldShowHud } from '../lib/hud.js'
 import { normalizePaginateOptions, countExtract } from '../lib/paginate.js'
@@ -1243,6 +1244,39 @@ test('pickTextMatch：优先弹出层内的可点击选项，而不是外层容�
   assert.equal(invisible.index, 1)
   assert.equal(pickTextMatch([]), null)
   assert.equal(pickTextMatch([{ index: 0, visible: false }]), null)
+})
+
+test('classifyHumanCheck：认出 reCAPTCHA / hCaptcha / 滑块，认不出就给 unknown', () => {
+  assert.equal(classifyHumanCheck({}), null)
+  assert.equal(
+    classifyHumanCheck({ frameUrls: ['https://www.google.com/recaptcha/api2/anchor?k=x'] }).kind,
+    'recaptcha',
+  )
+  assert.equal(classifyHumanCheck({ frameUrls: ['https://hcaptcha.com/1/api.js'] }).kind, 'hcaptcha')
+  assert.equal(classifyHumanCheck({ text: '请拖动滑块完成拼图' }).kind, 'slider')
+  assert.equal(classifyHumanCheck({ frameUrls: ['https://static.geetest.com/gt.js'] }).kind, 'geetest')
+  assert.equal(classifyHumanCheck({ text: '请完成安全验证' }).kind, 'unknown')
+  // 中文字样也要认出来
+  assert.ok(classifyHumanCheck({ text: '人机验证' }))
+  assert.ok(classifyHumanCheck({ text: 'verify you are human' }))
+})
+
+test('describeHumanCheck：headless 先切可见窗口，可见模式直接带到前台', () => {
+  const detection = { kind: 'recaptcha', label: 'reCAPTCHA 人机验证', note: 'n', evidence: ['e'] }
+  const headless = describeHumanCheck({ detection, visibility: 'headless', url: 'https://x.test/a' })
+  assert.equal(headless.detected, true)
+  assert.equal(headless.canSeeWindow, false)
+  assert.match(headless.steps[0], /headless/)
+  assert.match(headless.steps.join(' '), /browser_show/)
+  assert.match(headless.steps.join(' '), /waitForHuman/)
+  assert.equal(headless.waitAction, 'waitForHuman')
+
+  const visible = describeHumanCheck({ detection, visibility: 'window', url: 'https://x.test/a' })
+  assert.equal(visible.canSeeWindow, true)
+  assert.match(visible.steps[0], /browser_show\(\{action:"show"\}\)/)
+
+  // 没有验证码时不要编造步骤
+  assert.deepEqual(describeHumanCheck({ detection: null }), { detected: false })
 })
 
 async function main() {

@@ -2,7 +2,7 @@
 
 给 [DeepSeek Harness](https://github.com/deepseek-ai) 的浏览器操作插件：一个可长期驻留、默认后台静默的真实 Edge / Chromium 浏览器，加上面向「浏览 → 定位 → 提取 → 存证 → 批处理」的工具面。
 
-![status](https://img.shields.io/badge/status-0.8.1%20dev-brightgreen)
+![status](https://img.shields.io/badge/status-0.8.2%20dev-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![runtime](https://img.shields.io/badge/runtime-Node.js%2020%2B%20%7C%2022-339933)
 
@@ -74,6 +74,8 @@ browser_fetch { url: "https://api.example.com/quote" }
 - `visibility` 默认 `headless`：不弹窗、不抢焦点。
 - 永远不调用 `page.bringToFront()`，除非调用方显式要求可见。
 - 需要人工登录 / 验证码时，用 `visibility=window` 临时切到可见，由人完成，再切回后台。
+  验证码由 `lib/human-check.js` 识别类型并返回 `humanCheck`（含下一步命令）；人做完后用
+  `browser_act({action:"waitForHuman"})` 等它消失再继续——工具只等不代答。
 
 ### 长时运行与崩溃恢复
 

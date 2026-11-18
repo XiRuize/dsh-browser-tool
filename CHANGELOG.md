@@ -2,6 +2,33 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。本文件只记录真实发生或明确标记为「进行中」的变更，不把计划写成已发布事实。
 
+## [未发布] — 0.8.2（人机验证：识别 + 交给人的有效路径）
+
+问题：遇到验证码时，工具只丢一句「请人工处理」，但浏览器多半在 headless，人根本看不到窗口；
+也没有任何「等人做完再继续」的动作，于是流程直接卡死，只能靠人猜下一步。
+
+边界不变（`SECURITY.md`）：**不识别验证码答案、不自动点击验证码、不做 stealth 绕过**。
+这次补的是另一半——把「交给人」这条路径做通。
+
+### 新增
+
+- **`lib/human-check.js`**：`classifyHumanCheck()` 按 iframe 域名 / 页面文字 / 标题判定
+  `recaptcha` / `hcaptcha` / `cloudflare-turnstile` / `geetest` / `aliyun` / `tencent` / `slider` / `unknown`；
+  `describeHumanCheck()` 按当前 `visibility` 生成可执行的下一步；`waitForHumanClear()` 只轮询「是否消失」。
+- **`browser_act({action:"waitForHuman"})`**：默认等 120s（上限 600s），验证消失即返回 `verify.ok=true`；
+  超时返回 `verify.ok=false` + 当前类型，并提示「确认窗口在人眼前，或停下报给用户」。
+- **每个动作结束后顺带探测一次**（一次页面内只读求值）：命中就带 `humanCheck` 与 `message` 提示，
+  不再等 agent 自己从快照文字里猜。
+- `browser_open` / `snapshot` 结果带 `humanCheck`（类型 + 证据）；headless 时 `steps` 会先要求
+  `browser_show({action:"set", visibility:"window"})`（保留登录态重启），可见模式则直接
+  `browser_show({action:"show"})` 把窗口带到人眼前。
+
+### 测试
+
+- unit **34/34**（新增 `classifyHumanCheck`、`describeHumanCheck` 用例）。
+- e2e **123 assertions**（新增：打开带 reCAPTCHA 的页面 → `humanCheck.kind==='recaptcha'`、
+  `message` 点名类型、`waitForHuman` 在验证仍在时 `ok=false`、无验证码页面 `ok=true`）。
+
 ## [未发布] — 0.8.1（真实站点暴露的三个交互 bug：富文本覆盖、多命中点错、误报人机验证）
 
 来源：一次真实 LinkedIn 档案填写（约 60 次 `browser_act`），暴露的问题都不是「工具慢」，而是
