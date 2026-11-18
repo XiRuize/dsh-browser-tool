@@ -51,12 +51,12 @@ try {
     call('browser_act', { action: 'scroll', amount: 300, tab, snapshot: false }),
   )
   await timed('act click（auto 快照）', () => call('browser_act', { action: 'click', selector: '#go', tab }))
-  await timed('extract text（body，3k）', () => call('browser_extract', { mode: 'text', maxChars: 3000, tab }))
+  await timed('extract text（body，3k）', () => call('browser_read', { source: 'extract', mode: 'text', maxChars: 3000, tab }))
   await timed('extract records（限定 #long-list）', () =>
-    call('browser_extract', { mode: 'records', selector: '#long-list', itemSelector: 'li', fields: { text: '' }, limit: 50, tab }),
+    call('browser_read', { source: 'extract', mode: 'records', selector: '#long-list', itemSelector: 'li', fields: { text: '' }, limit: 50, tab }),
   )
-  await timed('screenshot 视口', () => call('browser_screenshot', { path: 'perf-vp.png', tab }))
-  await timed('screenshot 整页', () => call('browser_screenshot', { path: 'perf-full.png', fullPage: true, tab }))
+  await timed('screenshot 视口', () => call('browser_read', { source: 'screenshot', path: 'perf-vp.png', tab }))
+  await timed('screenshot 整页', () => call('browser_read', { source: 'screenshot', path: 'perf-full.png', fullPage: true, tab }))
 
   await call('browser_open', { url: `${server.base}/paged?page=1`, tab })
   const paged = await timed('paginate 3 页（records）', () =>
@@ -73,7 +73,7 @@ try {
   rows.push(['  └ 每页均摊 ms', Math.round(paged.ms / Math.max(1, paged.totalPages))])
 
   const batch = await timed('batch：goto + 提取（一次调用）', () =>
-    call('browser_batch', {
+    call('browser_act', {
       tab,
       steps: [
         { action: 'goto', url: `${server.base}/paged?page=2`, label: '跳转第 2 页' },
@@ -82,6 +82,18 @@ try {
     }),
   )
   rows.push(['  └ batch 条目数', batch.steps?.[1]?.extract?.data?.length ?? 0])
+
+  await timed('fetch 首次（网络）', () => call('browser_fetch', { url: `${server.base}/api/company` }))
+  const cachedHit = await timed('fetch 第二次（缓存命中）', () =>
+    call('browser_fetch', { url: `${server.base}/api/company` }),
+  )
+  rows.push(['  └ cached', cachedHit.cached === true])
+
+  let schemaBytes = 0
+  for (const [, tool] of tools) {
+    schemaBytes += JSON.stringify({ name: tool.name, description: tool.description, parameters: tool.parameters }).length
+  }
+  rows.push(['工具 schema 字节', schemaBytes])
 
   console.table(rows)
 } catch (error) {

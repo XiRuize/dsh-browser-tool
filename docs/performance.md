@@ -106,3 +106,16 @@ node test/forum-live.mjs iloveswufe 120
 - `browser_open` 支持 `snapshot:false`（只为跳转）与 `snapshotSelector`（只扫局部）。
 
 仍无法消除的固定成本：Edge **冷启动 ~3–5s**（浏览器常驻后不再发生，`idleCloseMs=0`）；论坛/交易所首次 HTTPS 建连偶发 3–5s。
+
+
+## 0.8.0：工具面瘦身 + 内容缓存
+
+| 指标 | 0.7.7 | 0.8.0 |
+|---|---|---|
+| 工具数 | 23 | **18** |
+| 工具 schema（每请求固定） | 27,794 B ≈ 8,700 tokens | **20,993 B ≈ 6,560 tokens**（−24%） |
+| 读取入口 | observe/inspect/extract/screenshot 四个 | 合并为 `browser_read`（source 分发） |
+| 多步 | `browser_batch` 独立工具 | 并入 `browser_act.steps` |
+| 内容缓存 | 无 | `browser_fetch` / `browser_read`（opt-in），命中 **2ms**（本地；网络路径原 26ms–5s） |
+| 回包精简 | 默认全量 | `detail=compact`：records 前 20 条、text 截 4000 字符 |
+| 未变化快照 | 每次全文 | 相同快照只回一行并沿用旧引用 |

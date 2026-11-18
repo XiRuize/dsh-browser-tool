@@ -2,11 +2,11 @@
 
 Browser-operation plugin for [DeepSeek Harness](https://github.com/deepseek-ai): a long-lived, silent-by-default real Edge / Chromium browser plus a tool surface for *observe → locate → act → verify → extract → archive*.
 
-![status](https://img.shields.io/badge/status-0.7.7%20published-brightgreen)
+![status](https://img.shields.io/badge/status-0.8.0%20ready-orange)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![runtime](https://img.shields.io/badge/runtime-Node.js%2020%2B%20%7C%2022-339933)
 
-> **Status**: `0.7.7` is published on GitHub (interaction latency: locate / capture / pagination; CI green). 23 tools: layered observation, multi-step batch, auto pagination, site tools, workspaces, silent/visible switching, HTTP fast path, QQ forum collection, scratch store and an F12-style frontend workflow; CI green. `0.1.0` was the initial baseline; see [`CHANGELOG.md`](CHANGELOG.md).
+> **Status**: `0.8.0` (speed release): unified read entry, content cache and compact replies; tool surface 23 → 18. Breaking: `browser_observe`/`browser_inspect`/`browser_extract`/`browser_screenshot` merged into `browser_read`; `browser_batch` folded into `browser_act.steps`; `browser_forum` now served by `browser_site` (siteId=qq-forum). 18 tools: layered observation, multi-step batch, auto pagination, site tools, workspaces, silent/visible switching, HTTP fast path, QQ forum collection, scratch store and an F12-style frontend workflow; CI green. `0.1.0` was the initial baseline; see [`CHANGELOG.md`](CHANGELOG.md).
 
 ## What it is
 

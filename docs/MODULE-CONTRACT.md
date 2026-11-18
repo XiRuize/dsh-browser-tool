@@ -105,6 +105,22 @@ export async function runSiteTool({ manager, page, sites, siteId, tool, args })
 
 约束：`paginate` 在点击前记录 URL 与页面文本签名，点击后必须等到其一变化再抓下一页（URL 先变、DOM 后到时还要等 `domcontentloaded` 与可选 `waitSelector`）；「下一页」启发式只在文本/aria/title 命中语义后才考虑分页容器加分，避免把 `page-item` 之类条目链接误判。清单工具复用 `extractPage` + `boundExtractResult`，`browser_forum` 与 `browser_site siteId=qq-forum` 走同一实现。
 
+## 内容缓存（`lib/cache.js`，0.8）
+
+```js
+export class ContentCache {
+  key(kind, url, spec)          // sha256(kind + url + 稳定序列化(spec))
+  async get(key)                // { body, ageMs, ... } | null
+  async put(key, { body, url, kind, spec, meta })
+  async prune({ force })        // 按 mtime 淘汰到 90% 容量
+  async clear()
+  async stats()
+}
+export function cacheableResponse({ method, status, headers, body, requestHeaders })
+```
+
+约定：只缓存 GET 2xx 文本/JSON；带 Authorization 或 `cache-control: no-store/private` 不缓存；`browser_fetch.cache` 默认开、`browser_read.cache` 默认关（页面可能变化，显式开启）；`refresh:true` 强制绕过。
+
 ## 性能约定（0.7.7）
 
 - `browser_act` 的 `snapshot` 缺省为 **auto**：仅当 `pageChanged` / 新标签页 / 动作属于 `click,type,press,back,forward,reload,dialog` 时才抓快照；实现里不得再无条件 `captureForTool`。

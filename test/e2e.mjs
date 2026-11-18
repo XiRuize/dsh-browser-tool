@@ -119,31 +119,31 @@ try {
   const mainTab = opened.page.tab
 
   step = 'browser_observe structure/text/meta'
-  const observed = await call('browser_observe', { layers: ['structure', 'text', 'meta'], tab: mainTab })
+  const observed = await call('browser_read', { source: 'observe', layers: ['structure', 'text', 'meta'], tab: mainTab })
   check(Boolean(observed.layers.structure?.text), 'observe structure 层有文本')
   check(observed.layers.text?.text.includes('测试科技有限公司'), 'observe text 层包含正文')
   check(observed.layers.meta?.title.includes('测试公司详情'), 'observe meta 层包含标题')
   check(observed.layers.meta?.counts?.tables >= 1, 'observe meta 统计表格')
 
   step = 'browser_inspect overview/dom/html/css/a11y/resources'
-  const overview = await call('browser_inspect', { mode: 'overview', tab: mainTab })
+  const overview = await call('browser_read', { source: 'inspect', mode: 'overview', tab: mainTab })
   check(overview.page?.title.includes('测试公司详情'), 'inspect overview 标题')
   check(overview.counts?.tables >= 1, 'inspect overview 统计表格')
-  const dom = await call('browser_inspect', { mode: 'dom', selector: 'body', tab: mainTab })
+  const dom = await call('browser_read', { source: 'inspect', mode: 'dom', selector: 'body', tab: mainTab })
   check(dom.count > 0 && /input|table|button/.test(dom.text), 'inspect dom 返回节点树')
-  const html = await call('browser_inspect', { mode: 'html', fullPage: true, tab: mainTab })
+  const html = await call('browser_read', { source: 'inspect', mode: 'html', fullPage: true, tab: mainTab })
   check(html.html.includes('<h1') && html.html.includes('测试科技有限公司'), 'inspect html 返回 outerHTML')
-  const css = await call('browser_inspect', { mode: 'css', selector: '#q', tab: mainTab })
+  const css = await call('browser_read', { source: 'inspect', mode: 'css', selector: '#q', tab: mainTab })
   check(Boolean(css.styles?.['font-size'] || css.styles?.display), 'inspect css 返回 computed styles')
-  const a11y = await call('browser_inspect', { mode: 'a11y', selector: 'body', tab: mainTab })
+  const a11y = await call('browser_read', { source: 'inspect', mode: 'a11y', selector: 'body', tab: mainTab })
   check(typeof a11y.yaml === 'string' && (a11y.yaml.length > 0 || a11y.rows.length > 0), 'inspect a11y 返回 aria 快照')
-  const resources = await call('browser_inspect', { mode: 'resources', tab: mainTab })
+  const resources = await call('browser_read', { source: 'inspect', mode: 'resources', tab: mainTab })
   check(Array.isArray(resources.entries) && resources.count >= 1, 'inspect resources 返回资源列表')
 
   step = 'browser_extract tables/labeled/markdown/forms'
-  const tables = await call('browser_extract', { mode: 'tables', tab: mainTab })
+  const tables = await call('browser_read', { source: 'extract', mode: 'tables', tab: mainTab })
   check(tables.data?.[0]?.rows?.some(row => row.includes('91310000TEST')), 'extract tables 包含信用代码')
-  const labeled = await call('browser_extract', {
+  const labeled = await call('browser_read', { source: 'extract',
     mode: 'labeled',
     labels: ['统一社会信用代码', '法定代表人', '注册资本'],
     tab: mainTab,
@@ -151,9 +151,9 @@ try {
   check(labeled.data?.['统一社会信用代码'] === '91310000TEST', 'extract labeled 信用代码')
   check(labeled.data?.['法定代表人'] === '张三', 'extract labeled 法定代表人')
   check(labeled.data?.['注册资本'] === '1000万元', 'extract labeled 注册资本')
-  const markdown = await call('browser_extract', { mode: 'markdown', tab: mainTab })
+  const markdown = await call('browser_read', { source: 'extract', mode: 'markdown', tab: mainTab })
   check(markdown.content.includes('# 测试科技有限公司'), 'extract markdown 标题')
-  const forms = await call('browser_extract', { mode: 'forms', tab: mainTab })
+  const forms = await call('browser_read', { source: 'extract', mode: 'forms', tab: mainTab })
   check(forms.data?.[0]?.fields?.some(field => field.name === 'q'), 'extract forms 包含输入字段')
 
   step = 'browser_act type/click/select/check 并回读核验'
@@ -195,7 +195,7 @@ try {
   )
 
   step = 'browser_batch 多步动作 + extract（一次调用）'
-  const batched = await call('browser_batch', {
+  const batched = await call('browser_act', {
     label: 'E2E 批量',
     tab: mainTab,
     steps: [
@@ -211,7 +211,7 @@ try {
 
   let batchFailure = null
   try {
-    await call('browser_batch', {
+    await call('browser_act', {
       tab: mainTab,
       steps: [{ action: 'click', selector: '#go' }, { action: 'click', selector: '#not-exist-e2e' }],
     })
@@ -291,7 +291,7 @@ try {
   check(/没有找到站点工具/.test(siteUnknown), 'site run 未知站点给出可读错误')
 
   step = 'browser_screenshot'
-  const shot = await call('browser_screenshot', { path: 'e2e-shot.png', fullPage: false, tab: mainTab })
+  const shot = await call('browser_read', { source: 'screenshot', path: 'e2e-shot.png', fullPage: false, tab: mainTab })
   check(shot.bytes > 1000, `screenshot 字节数 ${shot.bytes}`)
   check(shot.path.startsWith(config.artifactDir), 'screenshot 路径位于 artifactDir')
   const stat = await fs.stat(shot.path)
@@ -315,8 +315,12 @@ try {
   const fetched = await call('browser_fetch', { url: `${base}/api/company` })
   check(fetched.status === 200 && fetched.json?.creditCode === '91310000TEST', 'fetch 直连 JSON 接口')
   check(fetched.blocked === false, 'fetch 未误判风控')
+  const cachedFetch = await call('browser_fetch', { url: `${base}/api/company` })
+  check(cachedFetch.cached === true && String(cachedFetch.body).includes('91310000TEST'), 'fetch 命中内容缓存')
+  const refreshedFetch = await call('browser_fetch', { url: `${base}/api/company`, refresh: true })
+  check(refreshedFetch.cached !== true, 'fetch refresh 绕过缓存')
   await call('browser_open', { url: `${base}/list`, tab: mainTab })
-  const records = await call('browser_extract', {
+  const records = await call('browser_read', { source: 'extract',
     mode: 'records',
     itemSelector: '.item',
     fields: {

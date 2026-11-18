@@ -21,6 +21,7 @@ import { registerBrowserTools } from '../lib/tools.js'
 import { BrowserManager } from '../lib/manager.js'
 import { isRecoverableError, launchHint } from '../lib/host.js'
 import { BATCH_ACTIONS, normalizeSteps } from '../lib/batch.js'
+import { ContentCache, cacheableResponse, stableStringify } from '../lib/cache.js'
 import { hudText, shouldShowHud } from '../lib/hud.js'
 import { normalizePaginateOptions, countExtract } from '../lib/paginate.js'
 import { describeSites, loadSiteTools, matchUrl, normalizeManifest } from '../lib/site-tools.js'
@@ -1067,7 +1068,36 @@ test('site-tools 清单校验、URL 匹配与目录加载', async () => {
   assert.equal(missing.errors.length, 0)
 })
 
-test('tools.js 注册 23 个工具、schema 合法、并发安全分类与旧参数键齐全', () => {
+test('ContentCache：稳定键、命中、清理与可缓存判定', async () => {
+  const dir = path.join(tmpRoot, 'cache-unit')
+  const cache = new ContentCache({ cacheDir: dir, cacheTtlMs: 60000, cacheMaxBytes: 1024 * 1024 })
+  assert.equal(stableStringify({ b: 2, a: 1 }), stableStringify({ a: 1, b: 2 }))
+  const key = cache.key('fetch', 'https://a.test/x', { b: 2, a: 1 })
+  assert.equal(key, cache.key('fetch', 'https://a.test/x', { a: 1, b: 2 }))
+
+  await cache.put(key, { url: 'https://a.test/x', kind: 'fetch', body: 'hello' })
+  const hit = await cache.get(key)
+  assert.equal(hit.body, 'hello')
+  assert.ok(hit.ageMs >= 0)
+  assert.equal(await cache.get(cache.key('fetch', 'https://a.test/missing', {})), null)
+
+  const stats = await cache.stats()
+  assert.ok(stats.files >= 1 && stats.bytes > 0)
+  const cleared = await cache.clear()
+  assert.ok(cleared.removed >= 1)
+  assert.equal((await cache.stats()).files, 0)
+
+  assert.equal(cacheableResponse({ method: 'GET', status: 200, headers: {}, body: 'x' }), true)
+  assert.equal(cacheableResponse({ method: 'POST', status: 200, headers: {}, body: 'x' }), false)
+  assert.equal(cacheableResponse({ method: 'GET', status: 404, headers: {}, body: 'x' }), false)
+  assert.equal(cacheableResponse({ method: 'GET', status: 200, headers: { 'cache-control': 'no-store' }, body: 'x' }), false)
+  assert.equal(
+    cacheableResponse({ method: 'GET', status: 200, headers: {}, body: 'x', requestHeaders: { authorization: 'Bearer x' } }),
+    false,
+  )
+})
+
+test('tools.js 注册 18 个工具、schema 合法、并发安全分类与旧参数键齐全', () => {
   const config = resolveConfig({ artifactDir: path.join(tmpRoot, 'tools-artifacts') })
   const tools = new Map()
   const fakeCtx = {
@@ -1085,19 +1115,14 @@ test('tools.js 注册 23 个工具、schema 合法、并发安全分类与旧参
   const expectedNames = [
     'browser_open',
     'browser_snapshot',
-    'browser_observe',
-    'browser_inspect',
+    'browser_read',
     'browser_act',
-    'browser_batch',
     'browser_paginate',
     'browser_site',
-    'browser_extract',
-    'browser_screenshot',
     'browser_tabs',
     'browser_workspace',
     'browser_network',
     'browser_fetch',
-    'browser_forum',
     'browser_show',
     'browser_scratch',
     'browser_capture',
@@ -1107,7 +1132,7 @@ test('tools.js 注册 23 个工具、schema 合法、并发安全分类与旧参
     'browser_close',
     'browser_status',
   ]
-  assert.equal(tools.size, 23)
+  assert.equal(tools.size, 18)
   assert.deepEqual([...tools.keys()].sort(), expectedNames.slice().sort())
 
   for (const [name, tool] of tools) {
@@ -1127,18 +1152,15 @@ test('tools.js 注册 23 个工具、schema 合法、并发安全分类与旧参
 
   const oldKeys = {
     browser_open: ['url', 'tab', 'newTab', 'focus'],
-    browser_snapshot: ['tab', 'interactiveOnly', 'maxChars'],
-    browser_observe: ['layers', 'selector', 'ref', 'offset', 'limit'],
-    browser_inspect: ['mode', 'tab', 'selector', 'ref'],
-    browser_act: ['action', 'tab', 'ref', 'selector', 'text', 'value', 'key', 'verify'],
-    browser_extract: ['tab', 'mode', 'selector', 'labels', 'fields'],
-    browser_screenshot: ['tab', 'fullPage', 'ref', 'selector', 'path'],
+    browser_snapshot: ['tab', 'interactiveOnly', 'maxChars', 'selector', 'maxElements', 'detail'],
+    browser_read: ['tab', 'source', 'mode', 'layers', 'selector', 'ref', 'itemSelector', 'labels', 'fields', 'offset', 'limit', 'cache', 'refresh', 'detail', 'fullPage', 'path'],
+    browser_act: ['action', 'tab', 'ref', 'selector', 'text', 'value', 'key', 'verify', 'steps', 'snapshot', 'label', 'options'],
     browser_tabs: ['action', 'tab'],
     browser_workspace: ['action', 'workspaceId', 'label', 'role', 'toAgent', 'tab', 'note'],
     browser_network: ['action', 'tab', 'urlPattern', 'resourceTypes', 'maxEntries', 'maxBodyChars', 'id', 'urlContains', 'maxChars'],
     browser_collect: ['urls', 'mode', 'selector', 'labels', 'fields', 'maxChars', 'limit', 'concurrency', 'delayMs', 'save', 'jobId', 'cursor', 'deadlineMs', 'checkpointPath'],
-    browser_fetch: ['url', 'method', 'headers', 'body', 'timeoutMs', 'retries', 'maxChars', 'save'],
-    browser_forum: ['guild', 'limit', 'keywords', 'discover', 'sections', 'api', 'save'],
+    browser_fetch: ['url', 'method', 'headers', 'body', 'timeoutMs', 'retries', 'maxChars', 'save', 'cache', 'refresh'],
+    browser_site: ['action', 'siteId', 'tool', 'args'],
     browser_show: ['action', 'visibility', 'tab', 'restoreTabs'],
     browser_scratch: ['action', 'jobId', 'path', 'maxChars'],
     browser_capture: ['tab', 'selector', 'keep', 'maxChars'],
@@ -1154,16 +1176,13 @@ test('tools.js 注册 23 个工具、schema 合法、并发安全分类与旧参
 
   const safeCases = [
     ['browser_snapshot', {}, true],
-    ['browser_observe', {}, true],
-    ['browser_inspect', {}, true],
-    ['browser_extract', {}, true],
+    ['browser_read', {}, true],
     ['browser_fetch', {}, true],
-    ['browser_forum', {}, true],
+    ['browser_site', {}, false],
     ['browser_show', {}, true],
     ['browser_scratch', {}, true],
     ['browser_capture', {}, true],
     ['browser_devtools', {}, true],
-    ['browser_screenshot', {}, true],
     ['browser_status', {}, true],
     ['browser_open', {}, false],
     ['browser_act', {}, false],

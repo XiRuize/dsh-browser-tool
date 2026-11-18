@@ -2,6 +2,30 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。本文件只记录真实发生或明确标记为「进行中」的变更，不把计划写成已发布事实。
 
+## [未发布] — 0.8.0（提速：工具面瘦身 + 内容缓存 + 精简回包）
+
+目标：降低每轮请求的固定 token 与重复抓取，而不是继续抠几十毫秒的工具耗时。
+
+### 破坏性变更
+
+- `browser_observe` / `browser_inspect` / `browser_extract` / `browser_screenshot` → 合并为 **`browser_read`**，用 `source`（observe/inspect/extract/screenshot）+ `mode` 分发；只读工具从 4 个变 1 个。
+- `browser_batch` → 并入 **`browser_act.steps`**（传 `steps` 即多步模式，行为与参数不变）。
+- `browser_forum` → 由 **`browser_site`**（`siteId=qq-forum, tool=collect`）提供，取消独立工具。
+- 工具数 **23 → 18**，工具 schema **27,794 B → 20,993 B（≈8,700 → 6,560 tokens/请求，−24%）**。
+
+### 新增
+
+- **内容缓存** `lib/cache.js`：`key = sha256(kind + url + 稳定序列化(spec))`，TTL/容量双上限（默认 1h / 512MB，超限按 mtime 淘汰）。`browser_fetch` 默认启用（仅 GET 2xx 文本/JSON，带 Authorization 或 `no-store` 不缓存），`browser_read` 为 opt-in（`cache:true`）；均支持 `refresh:true` 绕过，命中返回 `cached:true` 与 `ageMs`。本地实测命中 **2ms**（原网络 26ms；真实站点 5s 级）。
+- **回包精简**：`browser_read` / `browser_act.steps` 支持 `detail=compact`（records 只回前 20 条、text 截 4000 字符，全文落盘）；`browser_snapshot` 相同快照只回一行并沿用旧 `@eN` 引用（`detail=full` 可强制全文）。
+- 配置：`cacheEnabled` / `cacheDir` / `cacheTtlMs` / `cacheMaxBytes`。
+- `browser_act.options`：把 button/clickCount/modifiers/state/urlPattern/responseUrl/exact/files/dialog/from/to/drag/waitFor 收进一个对象，压缩 schema。
+
+### 测试
+
+- unit 30/30（新增 ContentCache：稳定键、命中、清理、可缓存判定；工具面 18 与参数键校验）。
+- e2e 104 assertions（全部迁移到 `browser_read` 与 `browser_act.steps`，全过）。
+- `npm run test:perf` 新增缓存命中与 schema 字节两条基线。
+
 ## [未发布] — 0.7.7（交互延迟：定位 / 截取 / 翻页）
 
 用户反馈「速度还是很慢」，逐段量过之后发现瓶颈不在浏览器渲染，而在三处固定等待与“动作后必带快照”。

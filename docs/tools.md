@@ -1,6 +1,6 @@
 # 工具参考（tools）
 
-当前工具面共 23 个工具（基线工具 + `browser_observe`、`browser_inspect`、`browser_batch`、`browser_paginate`、`browser_site`、`browser_workspace`、`browser_show`、`browser_fetch`、`browser_forum`、`browser_capture`、`browser_scratch`、`browser_devtools`、`browser_status`）。参数、默认值与返回结构以 `lib/tools.js` 及各实现模块为准；真实 Edge 端到端验收仍待 install-verify 完成（见 [`install-verification.md`](install-verification.md)）。
+当前工具面共 18 个工具（0.8 起：`browser_observe`/`browser_inspect`/`browser_extract`/`browser_screenshot` 合并为 `browser_read`；`browser_batch` 并入 `browser_act.steps`；`browser_forum` 由 `browser_site` 提供）。参数、默认值与返回结构以 `lib/tools.js` 及各实现模块为准；真实 Edge 端到端验收仍待 install-verify 完成（见 [`install-verification.md`](install-verification.md)）。
 
 ## 通用约定
 
@@ -64,142 +64,43 @@
 | `maxChars` | integer | `snapshotMaxChars` | 1000–30000 |
 | `selector` | string | — | 只扫描这个容器（大页面快速定位） |
 | `maxElements` | integer | `280` | 最多扫描多少个可交互元素；大页面调小可提速 |
+| `detail` | string | `compact` | 与上次快照相同时只回一行并沿用旧引用；`full` 总是全文 |
 
 返回：`{ ok, page, snapshot: { text, refs, refMap, count, frames, captcha, scroll, title, url, tabId, truncated, nextCursor } }`。
 
 ---
 
-## `browser_observe`
+## `browser_read`
 
-一次调用按层读取页面状态。
-
-| 参数 | 类型 | 默认 | 说明 |
-|---|---|---|---|
-| `tab` | string | 当前页 | 目标标签页 |
-| `layers` | string[] | `["structure"]` | `structure` / `text` / `visual` / `network` / `console` / `meta` |
-| `selector` | string | — | 限定观测范围的 CSS selector |
-| `ref` | string | — | 以快照引用作为容器（visual 截图或结构范围） |
-| `offset` | integer | `0` | 分段起点（字符或行） |
-| `limit` | integer | 预算 | text 字符窗口 / structure 行 / network 条数上限 |
-| `maxChars` | integer | 配置值 | 本次输出字符预算 |
-| `save` | boolean | `false` | **仅 `save===true`** 时把各层结果额外落盘；超限时个别层仍会落盘 |
-| `format` | string | `png` | `text` / `json` / `png` / `jpeg`；只影响 **visual** 截图格式，text/json 仅为调用方兼容 |
-| `fullPage` | boolean | `false` | visual 是否整页截图 |
-| `path` | string | 自动 | visual 截图文件名或相对 artifacts 路径 |
-
-> `save` 默认 `false` 不等于「完全不落盘」：`visual` 层生成截图时一定会写入产物库并登记 manifest；text/network/console 超预算时也会落盘。
-
-返回：
-
-```json
-{
-  "ok": true,
-  "layers": {
-    "structure": { "text": "...", "refs": {}, "truncated": false, "nextCursor": null },
-    "text": { "text": "...", "length": 12000, "truncated": true, "nextCursor": 12000 },
-    "visual": {
-      "path": "C:/Users/生升/.dsh/browser-tool/artifacts/observe-view-....png",
-      "width": 1280,
-      "height": 720,
-      "bytes": 84213,
-      "fullPage": false,
-      "sha256": "...",
-      "id": "art-...",
-      "element": false,
-      "selector": null
-    },
-    "network": {
-      "active": true,
-      "count": 3,
-      "entries": [],
-      "note": "…"
-    },
-    "console": { "count": 0, "entries": [], "truncated": false },
-    "meta": { "title": "Example Domain", "url": "https://example.com/" }
-  },
-  "artifacts": [
-    {
-      "layer": "visual",
-      "kind": "screenshot",
-      "path": "C:/Users/生升/.dsh/browser-tool/artifacts/observe-view-....png",
-      "bytes": 84213,
-      "sha256": "...",
-      "id": "art-...",
-      "width": 1280,
-      "height": 720
-    }
-  ],
-  "nextCursor": 12000,
-  "page": { "tab": "t1", "url": "https://example.com/", "title": "Example Domain" },
-  "manifestPath": "C:/Users/生升/.dsh/browser-tool/artifacts/manifest.jsonl"
-}
-```
-
-说明：
-
-- `network` 层**不会自动开始捕获**；先 `browser_network action=start`，再触发页面请求。
-- `artifacts` 是对象数组，字段为 `layer`、`kind`、`path`、`bytes`、`sha256`、`id`，截图额外带 `width` / `height`。
-- `manifestPath` 仅在本次有落盘（`save=true` 或产生 artifacts）时返回。
-
-错误语义：`layers` 含未知值 → 列出可用值；`ref` 过期 → 要求重新快照；单层失败返回该层 `error`，不阻断其它层。
-
----
-
-## `browser_inspect`
-
-深层前端检查，返回普通 JSON。
+统一读取入口（0.8 起替代 `browser_observe` / `browser_inspect` / `browser_extract` / `browser_screenshot`）。
 
 | 参数 | 类型 | 默认 | 说明 |
 |---|---|---|---|
-| `mode` | string | `overview` | `overview` / `dom` / `html` / `css` / `a11y` / `box` / `resources` / `scripts` / `storage` / `console` / `performance` / `eval` |
-| `tab` | string | 当前页 | 目标标签页 |
-| `selector` | string | — | 限定检查元素 |
-| `ref` | string | — | 快照引用；没有 selector 时转换为 `[data-dsh-ref="..."]` |
-| `depth` | integer | `4` | DOM 树深度，0–12 |
-| `maxNodes` | integer | `300` | DOM/a11y 最大节点数 |
-| `limit` | integer | 200 | 资源/脚本/存储/console 条数上限 |
-| `properties` | string[] | — | css 模式要读取的 computed 属性 |
-| `attrs` | string[] | — | dom 模式只保留这些属性 |
-| `includeText` | boolean | `true` | dom 模式是否包含文本 |
-| `includeSecrets` | boolean | `false` | storage 模式是否返回 cookie / storage 原值；默认脱敏为 `***` |
-| `fullPage` | boolean | `false` | html 模式是否读取整个 `documentElement` |
-| `urlPattern` | string | — | resources 模式按 URL 正则过滤 |
-| `script` | string | — | eval 模式要执行的 JS |
-| `code` | string | — | `script` 的兼容别名（会被映射到 `script`） |
-| `maxChars` | integer | 配置值 | 输出预算，超长落盘返回 `savedPath` |
+| `source` | string | `auto` | `observe` / `inspect` / `extract` / `screenshot`；auto 按 `mode`/`layers` 推断 |
+| `mode` | string | — | extract：`text/html/links/tables/labeled/structured/records/markdown/images/forms`；inspect：`overview/dom/html/css/a11y/box/resources/scripts/storage/console/performance` |
+| `layers` | string[] | `["structure"]` | observe 层：`structure/text/visual/network/console/meta` |
+| `selector` / `container` / `ref` | string | — | 限定读取范围 |
+| `itemSelector` / `labels` / `fields` | — | — | extract records / labeled / structured 参数 |
+| `offset` / `limit` / `maxChars` | integer | — | 字符/条数窗口与输出预算 |
+| `fullPage` / `format` / `path` | — | — | inspect html 整页；screenshot 截图 |
+| `cache` | boolean | `false` | extract 是否走内容缓存（页面可能变化，静态列表再开） |
+| `refresh` | boolean | `false` | 强制绕过缓存 |
+| `detail` | string | `compact` | `compact`：records 只回前 20 条、text 截 4000 字符；`full` 全量 |
 
-各模式返回要点：
-
-- `overview`：`{ mode, page: { title, url, tab }, lang, charset, viewport: { width, height, devicePixelRatio }, scroll, counts: { frames, resources, scripts, forms, images, links, tables, headings, domNodes }, generator, frameworks }`。
-- `dom`：`{ selector, depth, count, truncated, depthLimited, text, savedPath }`，`text` 为缩进节点行。
-- `html`：`{ selector, fullPage, length, html, truncated, savedPath }`；`fullPage=true` 时一定会保留完整 HTML 文件。
-- `css`：`{ selector, properties, count, styles: { prop: value } }`；selector 无匹配时返回 `note`。
-- `a11y`：`{ selector, source, yaml, rows, truncated, savedPath }`；`source` 为 `ariaSnapshot` 或回退的 `aria-attributes`。
-- `box`：`{ selector, box, ... }`；`box` 为 `boundingBox()` 结果，无匹配时 `box: null` + `note`。
-- `resources`：`{ count, totalTransferSize, totalDecodedBodySize, byType, entries, truncated, savedPath }`。
-- `scripts`：`{ count, entries, truncated, savedPath }`。
-- `storage`：`{ redacted, includeSecrets, cookies: { count, items, truncated }, localStorage, sessionStorage, indexedDB, note }`；默认 `redacted: true`，cookie 无 `value`，storage 值为 `***`。
-- `console`：`{ count, entries, truncated, note, savedPath }`。
-- `performance`：`{ ...timing, navigation, resources, ... }`，超长时 `truncated` + `savedPath`。
-- `eval`：`{ result }`；结果超长时 `result:null` + `savedPath`；`allowEval !== true` 时抛错，`script` 为空也抛错。
-
-错误语义：
-
-```text
-eval 默认关闭（allowEval=false）。如确需执行，请在 cordis.patch.yml 中设置 allowEval: true，并在任务中明确说明用途。
-```
-
-`storage` 返回原值时（`includeSecrets=true`）会附带警告：请勿写入日志或公开输出。
+返回带 `source` 字段区分通道；extract 命中缓存时返回 `cached:true` 与 `ageMs`。
 
 ---
 
 ## `browser_act`
 
-对页面执行一个动作，默认回读核验。
+执行单个动作，或传 `steps` 一次跑多步（0.8 起吸收原 `browser_batch`），默认回读核验。
 
 | 参数 | 类型 | 默认 | 说明 |
 |---|---|---|---|
-| `action` | string | 必填 | `click` / `type` / `press` / `scroll` / `select` / `check` / `uncheck` / `hover` / `drag` / `upload` / `back` / `forward` / `reload` / `wait` / `waitFor` / `dialog` |
+| `action` | string | 单步必填 | `click` / `type` / `press` / `scroll` / `select` / `check` / `uncheck` / `hover` / `drag` / `upload` / `back` / `forward` / `reload` / `wait` / `waitFor` / `dialog`；传 `steps` 时忽略 |
+| `steps` | array | — | 多步模式：1–50 步，每步 `{action, label?, url?, ref?, selector?, text?, value?, key?, verify?, mode?, itemSelector?, fields?}`；action 支持 act 全部动作 + `extract` + `goto` |
+| `stopOnError` | boolean | `true` | steps 模式某步失败是否立即停止 |
+| `options` | object | — | 附加参数：button/clickCount/modifiers/state/urlPattern/responseUrl/exact/files/dialog/from/to/drag/waitFor |
 | `tab` | string | 当前页 | 目标标签页 |
 | `ref` | string | — | 快照引用 |
 | `selector` | string | — | CSS selector |
@@ -213,21 +114,10 @@ eval 默认关闭（allowEval=false）。如确需执行，请在 cordis.patch.y
 | `times` | integer | `1` | `scroll` 次数 |
 | `submit` | boolean | `false` | `type` 后按 Enter |
 | `clear` | boolean | `true` | `type` 前是否清空原值 |
-| `button` | string | `left` | `click` 鼠标键 |
-| `clickCount` | integer | `1` | 点击次数 |
-| `modifiers` | string[] | — | 修饰键 |
 | `ms` | integer | `1000` | `wait` 毫秒 |
 | `verify` | boolean | `true` | 动作后是否回读核验 |
+| `label` | string | — | 角标文案（可见模式下显示） |
 | `snapshot` | boolean | auto | 动作后是否附带快照。不传时 auto：页面变化或 click/type/press 等动作才附带；`false` 强制省略、`true` 强制附带 |
-| `state` | string | `visible` | `waitFor` 元素状态：`attached` / `visible` / `hidden` / `detached` |
-| `urlPattern` | string | — | `waitFor` 要等待的 URL 通配符或正则 |
-| `responseUrl` | string | — | `waitFor` 要等待的响应 URL 片段 |
-| `exact` | boolean | `false` | `text` 定位是否精确匹配 |
-| `files` | string[] | — | `upload` 的本地文件路径 |
-| `dialog` | string | — | `accept` / `dismiss`：触发动作时如何处理对话框 |
-| `from` / `to` | string | — | `drag` 的源/目标（ref 或 selector） |
-| `drag` | object | — | `{ "from": "e1", "to": "e2" }` |
-| `waitFor` | object | — | `{ selector, ref, text, state, urlPattern, responseUrl, timeoutMs }`，字段并入本次动作参数 |
 | `timeoutMs` | integer | 配置值 | 动作超时 |
 
 返回：
@@ -257,45 +147,6 @@ eval 默认关闭（allowEval=false）。如确需执行，请在 cordis.patch.y
 `verify` 可能包含：`urlChanged`、`titleChanged`、`newTab`、`newTabUrl`、`dialog`、`exists`、`visible`、`value`、`checked`、`selected`、`aria`、`response`、`notes`。动作打开新标签页时，返回会自动切到新页并重新快照。
 
 错误语义：引用过期 → 「ref 已失效，请重新快照」；元素不可见/被遮挡 → 返回 Playwright 原因 + 建议滚动或 `waitFor`；reader 角色 → 「当前工作区角色为 reader，不能执行写操作」；锁超时 → 明确提示；`upload` 文件不存在 → 明确路径错误。
-
----
-
-## `browser_batch`
-
-一次调用顺序执行多步，减少「点一下 → 看一眼结果」的往返。支持 `browser_act` 的全部动作，外加 `extract`（读内容）与 `goto`（导航）。
-
-| 参数 | 类型 | 默认 | 说明 |
-|---|---|---|---|
-| `tab` | string | 当前页 | 目标标签页 |
-| `label` | string | — | 整批操作名称（结果显示，可见模式下也用于角标） |
-| `steps` | array | 必填 | 1–50 步；每步至少 `action`，定位字段与 `browser_act` 相同 |
-| `stopOnError` | boolean | `true` | 某步失败是否立即停止；`false` 时继续并汇总 |
-| `timeoutMs` | integer | `120000` | 整批总预算，上限 `175000` |
-
-每步可用字段：
-
-- 动作：`action`、`label`、`ref` / `selector` / `text` / `container` / `nth`、`value`、`key`、`submit`、`clear`、`ms`、`state`、`urlPattern`、`responseUrl`、`timeoutMs`；
-- 导航：`action: "goto"` + `url`（可选 `waitUntil`、`timeoutMs`）；
-- `verify`：默认 `false`（批量默认关闭逐步回读以换取速度，需要时可单步打开）；
-- 提取：`action: "extract"` + `mode` / `selector` / `itemSelector` / `labels` / `fields` / `maxChars` / `offset` / `limit`。
-
-返回：
-
-```json
-{
-  "ok": true,
-  "label": "翻到第 2 页并读列表",
-  "steps": [
-    { "index": 1, "action": "click", "label": "下一页", "ok": true, "ms": 132, "message": "已点击 @e7。" },
-    { "index": 2, "action": "extract", "ok": true, "ms": 88, "extract": { "mode": "text", "text": "..." } }
-  ],
-  "extract": { "mode": "text", "text": "...", "truncated": false, "savedPath": null },
-  "ms": 220,
-  "page": { "tab": "t1", "url": "https://example.com/list?page=2" }
-}
-```
-
-错误语义：失败时抛出 `第 N/M 步（action）失败：原因 已完成 K 步：…`，便于模型只补失败的那一步。可见模式（`window` / `offscreen`）下页面右下角会出现「DSH · N/M · label」角标，失败变红；`headless` 下不注入。
 
 ---
 
@@ -332,57 +183,6 @@ eval 默认关闭（allowEval=false）。如确需执行，请在 cordis.patch.y
   "savedPath": ".../paginate-20261118_143500.json"
 }
 ```
-
----
-
-## `browser_extract`
-
-| 参数 | 类型 | 默认 | 说明 |
-|---|---|---|---|
-| `tab` | string | 当前页 | 目标标签页 |
-| `mode` | string | `text` | `text` / `html` / `links` / `tables` / `labeled` / `structured` / `records` / `markdown` / `images` / `forms` |
-| `selector` | string | — | 限定容器 |
-| `container` | string | — | `selector` 的兼容别名 |
-| `labels` | string[] | — | `labeled` 的标签列表 |
-| `itemSelector` | string | — | `records` 的记录容器选择器 |
-| `fields` | object | — | `structured` / `records` 字段映射；records 下相对每个列表项取值 |
-| `maxChars` | integer | `extractMaxChars` | 返回上限 |
-| `offset` | integer | `0` | `text` / `markdown` 的字符窗口起点 |
-| `limit` | integer | `200` | `text`/`markdown` 为字符窗口大小；数组模式为条数上限（内部最多 1000） |
-| `includeFrames` | boolean | `false` | `text`/`html` 是否合并 iframe 内容 |
-
-返回：
-
-```json
-{
-  "ok": true,
-  "mode": "labeled",
-  "content": "统一社会信用代码：...\n法定代表人：...",
-  "truncated": false,
-  "savedPath": null,
-  "nextCursor": null,
-  "page": { "tab": "t1", "url": "...", "title": "..." }
-}
-```
-
-`structured` 返回 `data` 对象；`records` / `links` / `tables` / `images` / `forms` 返回 `data` 数组；`records` 一次抽完整列表，避免逐条选择器调用；超长或分段时 `savedPath` 指向完整文件，`nextCursor` 用于继续读取窗口。
-
----
-
-## `browser_screenshot`
-
-| 参数 | 类型 | 默认 | 说明 |
-|---|---|---|---|
-| `tab` | string | 当前页 | 目标标签页 |
-| `fullPage` | boolean | `false` | 整页截图 |
-| `ref` / `selector` | string | — | 只截取元素 |
-| `path` | string | 自动 | 文件名或相对 `artifacts` 的路径；绝对路径需 `allowAbsoluteArtifacts` |
-| `format` | string | `png`/按扩展名 | `png` / `jpeg` |
-| `timeoutMs` | integer | 配置值 | 截图超时 |
-
-返回：`{ ok, id, path, bytes, width, height, sha256, element, fullPage, page }`。
-
-错误：元素不在视口或不可见 → 明确原因；路径越界 → 拒绝并提示 `allowAbsoluteArtifacts`。
 
 ---
 
@@ -560,27 +360,6 @@ HTTP 快通道：复用当前浏览器上下文的 Cookie / UA / Referer 直接�
 返回 `{ ok, status, finalUrl, contentType, bytes, body, json, blocked, elapsedMs, retriesUsed, savedPath }`。
 `blocked=true` 表示命中 JS 挑战 / 验证码 / 401 / 403 / 429，应改用渲染路径。
 
----
-
-## `browser_forum`
-
-站点适配器：采集 QQ 论坛（腾讯频道 `pd.qq.com`）帖子。
-
-| 参数 | 类型 | 默认 | 说明 |
-|---|---|---|---|
-| `guild` | string | `iloveswufe` | 频道号或完整频道 URL |
-| `limit` | integer | `100` | 目标条数，最大 1000 |
-| `keywords` | string[] | — | 关键词过滤（正文或昵称） |
-| `discover` | boolean | `false` | 渲染一次频道页，自动发现全部版块 `subc`（约 4–6 秒） |
-| `sections` | object[] | 全部/热门/二手 | `[{name, subc}]`，可自行补充 |
-| `paginate` | boolean | `false` | 每个版块走 `GetChannelTimelineFeeds` 游标翻页（100+ 条/版块） |
-| `watch` | boolean | `false` | 可见翻页：窗口里真实滚动加载（慢，便于验收） |
-| `concurrency` | integer | `3` | paginate 时并行版块数，1–6 |
-| `api` | object | — | 可选 JSON 分页：`{body, pageSize, maxPages, headers}`，`body` 支持 `{{cursor}}` / `{{pageSize}}` 占位 |
-| `save` | boolean | `true` | 是否落盘 JSON |
-
-每条帖子返回 `post_id / author_tinyid / author_nick / posted_at / text / link`。
-作者 `tiny_id` 由帖子 id 反解（`1441152` + 11 位），不依赖接口。
 ---
 
 ## `browser_site`
