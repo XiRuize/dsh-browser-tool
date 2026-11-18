@@ -21,6 +21,7 @@ import { registerBrowserTools } from '../lib/tools.js'
 import { BrowserManager } from '../lib/manager.js'
 import { isRecoverableError, launchHint } from '../lib/host.js'
 import { BATCH_ACTIONS, normalizeSteps } from '../lib/batch.js'
+import { compareFillText, pickTextMatch, squashWhitespace } from '../lib/act.js'
 import { ContentCache, cacheableResponse, stableStringify } from '../lib/cache.js'
 import { hudText, shouldShowHud } from '../lib/hud.js'
 import { normalizePaginateOptions, countExtract } from '../lib/paginate.js'
@@ -1205,6 +1206,44 @@ test('tools.js 注册 18 个工具、schema 合法、并发安全分类与旧参
 // ---------------------------------------------------------------------------
 // run
 // ---------------------------------------------------------------------------
+
+test('compareFillText：换行/空白差异不算填错，真差异才算', () => {
+  assert.equal(squashWhitespace('a b\nc'), 'abc')
+  assert.equal(compareFillText('已填写', '已填写'), 'exact')
+  // rich text 把换行折成空格（LinkedIn 头衔/简介常见）
+  assert.equal(compareFillText('第一段 第二段', '第一段\n第二段'), 'whitespace')
+  // 连续空白、nbsp 折叠
+  assert.equal(compareFillText('a\u00a0 b', 'a b'), 'whitespace')
+  assert.equal(compareFillText('已填写', '已填写。'), null)
+  assert.equal(compareFillText('', 'x'), null)
+})
+
+test('pickTextMatch：优先弹出层内的可点击选项，而不是外层容器', () => {
+  // 真实场景：点击文本“西南财经大学”命中 7 个，第 1 个是页面容器
+  const picked = pickTextMatch([
+    { index: 0, visible: true, inPopup: false, interactive: false, area: 900000, inViewport: true },
+    { index: 4, visible: true, inPopup: true, interactive: true, area: 1800, inViewport: true },
+    { index: 6, visible: true, inPopup: false, interactive: true, area: 2400, inViewport: true },
+  ])
+  assert.equal(picked.index, 4)
+  assert.equal(picked.reason, '弹出层内')
+
+  // 没有弹出层时：可点击 > 纯文本容器
+  const noPopup = pickTextMatch([
+    { index: 0, visible: true, inPopup: false, interactive: false, area: 50000 },
+    { index: 2, visible: true, inPopup: false, interactive: true, area: 30000 },
+  ])
+  assert.equal(noPopup.index, 2)
+
+  // 不可见元素直接淘汰
+  const invisible = pickTextMatch([
+    { index: 0, visible: false, inPopup: true, interactive: true, area: 100 },
+    { index: 1, visible: true, inPopup: false, interactive: false, area: 4000 },
+  ])
+  assert.equal(invisible.index, 1)
+  assert.equal(pickTextMatch([]), null)
+  assert.equal(pickTextMatch([{ index: 0, visible: false }]), null)
+})
 
 async function main() {
   await fs.rm(tmpRoot, { recursive: true, force: true })

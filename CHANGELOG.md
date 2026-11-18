@@ -2,6 +2,36 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。本文件只记录真实发生或明确标记为「进行中」的变更，不把计划写成已发布事实。
 
+## [未发布] — 0.8.1（真实站点暴露的三个交互 bug：富文本覆盖、多命中点错、误报人机验证）
+
+来源：一次真实 LinkedIn 档案填写（约 60 次 `browser_act`），暴露的问题都不是「工具慢」，而是
+「动作看似成功、结果错位」，逼着 agent 反复回读重试。
+
+### 修复
+
+- **contenteditable 填写会被追加而不是覆盖**：`type` 原先对所有目标都用 `locator.fill()`。
+  富文本（LinkedIn 的个性头衔/个人简介编辑器）自己维护选区，fill 后变成「旧文本 + 新文本」，
+  却仍回报「覆盖」。现在先判断 `isContentEditable`（排除 input/textarea），走
+  `点击聚焦 → Control+A → Delete → 逐行 keyboard.insertText`；行间用 `Shift+Enter`
+  （单行编辑器里不会误提交表单）。清空前必须确认焦点在目标内部，否则跳过清空并注明，
+  避免 Control+A 选中整页后误删页面内容。
+- **换行被折成空格导致假「核验未通过」**：回读 contenteditable 时空白被折叠，与期望的
+  `\n` 永远不相等。新增 `compareFillText()`：完全一致 = `exact`；仅空白/换行不同 = `whitespace`
+  （视为成功并注明）；真差异才判失败。
+- **文本多命中点错元素**：`getByText` 命中多个时默认取第 1 个，常常点到外层容器整段文字。
+  新增 `pickTextMatch()`：一次页面内评估后按「弹出层（listbox/menu/option）内 > 可点击标签 >
+  面积更小 > 在视口内」加权排序；显式传 `nth` 时仍尊重调用方。排序原因写进 `target.pickReason`、
+  标签与 verify notes。
+- **几乎每个页面都误报「检测到人机验证」**：隐形 reCAPTCHA / protechts 等第三方验证 iframe
+  自带 captcha 字样，经逐 frame 合并后把整页标成验证页（LinkedIn 全程误报十余次）。
+  现在子 frame 只有「可见且 ≥200×150」才计入，主 frame 始终计入。
+
+### 测试
+
+- unit **32/32**（新增 `compareFillText`、`pickTextMatch` 两组纯函数用例，含 LinkedIn 那 7 个命中的真实形状）。
+- e2e **114 assertions**（新增 contenteditable 覆盖+换行、文本多命中按弹出层排序、
+  隐形验证 iframe 不误报 / 主页面拦截页仍报警；`test/live-server.mjs` 补了对应夹具）。
+
 ## [未发布] — 0.8.0（提速：工具面瘦身 + 内容缓存 + 精简回包）
 
 目标：降低每轮请求的固定 token 与重复抓取，而不是继续抠几十毫秒的工具耗时。

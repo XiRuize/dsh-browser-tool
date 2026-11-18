@@ -2,7 +2,7 @@
 
 Browser-operation plugin for [DeepSeek Harness](https://github.com/deepseek-ai): a long-lived, silent-by-default real Edge / Chromium browser plus a tool surface for *observe → locate → act → verify → extract → archive*.
 
-![status](https://img.shields.io/badge/status-0.8.0%20published-brightgreen)
+![status](https://img.shields.io/badge/status-0.8.1%20dev-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![runtime](https://img.shields.io/badge/runtime-Node.js%2020%2B%20%7C%2022-339933)
 

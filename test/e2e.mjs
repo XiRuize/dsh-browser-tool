@@ -194,6 +194,32 @@ try {
     'container 限定重复选项 select（value + label）',
   )
 
+  step = 'contenteditable 覆盖填写：不残留旧文本、保留换行'
+  const richTyped = await call('browser_act', {
+    action: 'type',
+    selector: '#rich',
+    value: '第一行\n第二行',
+    tab: mainTab,
+  })
+  check(richTyped.verify?.ok === true, 'contenteditable type verify.ok')
+  check(/逐行输入/.test(String(richTyped.message || '')), 'contenteditable 走逐行输入路径')
+  const richValue = String(richTyped.verify?.value || '')
+  check(richValue.includes('第一行') && richValue.includes('第二行'), 'contenteditable 两行都写入')
+  check(!richValue.includes('残留文本'), 'contenteditable 覆盖后不残留旧文本')
+
+  step = '文本多命中：优先弹出层内的选项，而不是同名的段落文字'
+  const picked = await call('browser_act', { action: 'click', text: '贵州茅台', tab: mainTab })
+  check(picked.target?.pickReason === '弹出层内', '文本多命中按弹出层排序')
+  check(picked.snapshot?.text.includes('option-hit'), '点到的是 listbox 选项而非段落')
+
+  step = '人机验证提示：隐藏 iframe 不误报，主页面拦截页才报'
+  const cleanSnap = await call('browser_snapshot', { tab: mainTab })
+  check(cleanSnap.snapshot?.captcha !== true, '隐形验证 iframe 不触发人机验证提示')
+  await call('browser_open', { url: `${base}/verify`, tab: mainTab })
+  const verifySnap = await call('browser_snapshot', { tab: mainTab })
+  check(verifySnap.snapshot?.captcha === true, '主页面验证拦截页仍会提示')
+  await call('browser_open', { url: `${base}/`, tab: mainTab })
+
   step = 'browser_batch 多步动作 + extract（一次调用）'
   const batched = await call('browser_act', {
     label: 'E2E 批量',

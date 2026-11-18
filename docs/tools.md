@@ -146,6 +146,12 @@
 
 `verify` 可能包含：`urlChanged`、`titleChanged`、`newTab`、`newTabUrl`、`dialog`、`exists`、`visible`、`value`、`checked`、`selected`、`aria`、`response`、`notes`。动作打开新标签页时，返回会自动切到新页并重新快照。
 
+填写语义（0.8.1 起）：
+
+- `type` 对普通 `input`/`textarea` 走 `fill`；对 **contenteditable**（富文本/自定义编辑器）走「聚焦 → `Control+A` → `Delete` → 逐行 `insertText`」，行间用 `Shift+Enter`，因此 `\n` 能保留为换行、`clear` 默认真正覆盖旧文本。清空前会确认焦点在目标内部，未确认时跳过清空并在 `notes` 说明（避免误删整页内容）。
+- 回读比较容忍纯空白差异：完全一致为 `exact`，仅空白/换行不同视为成功并在 `notes` 注明，不再误报「核验未通过」。
+- 文本定位命中多个元素时（`target.matchCount > 1`），默认不再盲取第 1 个：按「弹出层（listbox/menu/option）内 > 可点击标签 > 面积更小 > 在视口内」排序，原因写入 `target.pickReason`（`弹出层内` / `可点击元素` / `面积更小`）。显式传 `nth` 或 `container` 时以调用方为准。
+
 错误语义：引用过期 → 「ref 已失效，请重新快照」；元素不可见/被遮挡 → 返回 Playwright 原因 + 建议滚动或 `waitFor`；reader 角色 → 「当前工作区角色为 reader，不能执行写操作」；锁超时 → 明确提示；`upload` 文件不存在 → 明确路径错误。
 
 ---

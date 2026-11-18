@@ -61,7 +61,18 @@ const page = `<!doctype html>
     <select class="pick" id="pickB"><option value="b1">选项A</option><option value="b2">选项B2</option></select>
   </div>
 
+  <p id="dupText">贵州茅台</p>
+  <div id="combo">
+    <input id="comboInput" type="text" role="combobox" aria-expanded="true" autocomplete="off">
+    <ul id="comboList" role="listbox" style="margin:0;padding:0;list-style:none">
+      <li role="option" id="comboOption" tabindex="-1"
+        onclick="document.getElementById('out').textContent='option-hit'">贵州茅台</li>
+    </ul>
+  </div>
+  <div id="rich" contenteditable="true" role="textbox" aria-label="富文本">残留文本</div>
+
   <div id="out"></div>
+  <iframe src="/tiny-verify" width="1" height="1" title="隐形验证"></iframe>
   <iframe src="/frame" title="测试 frame"></iframe>
   <ul id="long-list">${longItems}</ul>
   <script>fetch('/api/bootstrap')</script>
@@ -131,6 +142,20 @@ export async function startLocalServer() {
       return html(response, pagedPage(pageNo))
     }
     if (url.pathname === '/frame') return html(response, frame)
+    // 隐形第三方验证 iframe：只用来验证「不因隐藏 iframe 里的验证码字样误报」。
+    if (url.pathname === '/tiny-verify') {
+      return html(
+        response,
+        '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>verify</title></head><body style="margin:0"><div style="width:1px;height:1px;overflow:hidden">人机验证 captcha</div></body></html>',
+      )
+    }
+    // 真正的验证拦截页：主 frame 可见文本就该报警。
+    if (url.pathname === '/verify') {
+      return html(
+        response,
+        '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>安全验证</title></head><body><h1>请完成安全验证</h1><p>请拖动滑块完成验证</p></body></html>',
+      )
+    }
     return html(response, page)
   })
 
