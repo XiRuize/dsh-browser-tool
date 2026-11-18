@@ -2,6 +2,37 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。本文件只记录真实发生或明确标记为「进行中」的变更，不把计划写成已发布事实。
 
+## [未发布] — 0.7.7（交互延迟：定位 / 截取 / 翻页）
+
+用户反馈「速度还是很慢」，逐段量过之后发现瓶颈不在浏览器渲染，而在三处固定等待与“动作后必带快照”。
+
+### 改动
+
+- **`browser_act` 默认 auto 快照**：只有页面变化或 `click` / `type` / `press` / `back` / `forward` / `reload` / `dialog` 才附带快照；`scroll` / `hover` / `wait` / `check` 不再背 8KB 快照。新增 `snapshot` 参数（`true` / `false` / 缺省 auto）。
+- **`detectNewTab` 先看页数**：绝大多数动作不会开新标签页，不再白等 150ms；真开了也只需 80ms。
+- **滚动去累积睡眠**：`times` 次滚动由「每次 120ms」改为「整体 80ms」。
+- **`browser_snapshot` 支持局部扫描**：新增 `selector` / `maxElements`；限定 selector 时不再为「0 个可交互元素」白等 300ms。
+- **`browser_open` 支持只跳转**：新增 `snapshot:false`、`snapshotSelector`、`snapshotMaxChars`。
+- **`browser_batch` 新增 `goto` 步骤**：一次调用完成「跳转 → 操作 → 提取」。
+- **`browser_paginate` 提频**：变化轮询 150→60ms、沉降 120→80ms、`domcontentloaded` 上限 5s→1.5s。
+- **`navigateSettleMs` 默认 120 → 60ms**。
+
+### 实测（同机本地页，`npm run test:perf`）
+
+| 操作 | 0.7.6 | 0.7.7 |
+|---|---|---|
+| act scroll | 443ms | 219–268ms |
+| act click | 422ms | 240ms |
+| snapshot 限定 selector（无交互元素） | 330ms | 15ms |
+| paginate 3 页 | 577ms | 463ms（154ms/页） |
+| batch goto+extract | — | 54ms |
+| screenshot 视口 / 整页 | 150 / 540ms | 113 / 485ms |
+
+### 测试
+
+- 新增 `test/perf.mjs`（`npm run test:perf`）作为延迟基线；unit 29/29、e2e 104 assertions 全过。
+- 固定成本：Edge 冷启动 3–5s（浏览器常驻后不再发生）。
+
 ## [未发布] — 0.7.6（自动翻页 + 站点工具注册表）
 
 继续借鉴 nuwa-browser：把「翻页」和「站点能力」从一次性脚本提升为一等工具。

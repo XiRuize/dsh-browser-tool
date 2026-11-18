@@ -33,6 +33,9 @@
 | `visibility` | string | 配置值 | `headless` / `offscreen` / `window`；浏览器未启动时立即生效，已运行时等下次启动 |
 | `workspaceId` | string | — | 把标签页开在指定工作区；需要是该工作区成员 |
 | `waitUntil` | string | `domcontentloaded` | `load` / `domcontentloaded` / `networkidle` |
+| `snapshot` | boolean | `true` | 是否附带首屏快照；只为快速跳转时传 `false` |
+| `snapshotSelector` | string | — | 只扫这个容器生成首屏快照 |
+| `snapshotMaxChars` | integer | `12000` | 首屏快照字符上限（1000–30000） |
 
 返回：
 
@@ -59,6 +62,8 @@
 | `tab` | string | 当前页 | 目标标签页 |
 | `interactiveOnly` | boolean | `false` | 只列可交互元素 |
 | `maxChars` | integer | `snapshotMaxChars` | 1000–30000 |
+| `selector` | string | — | 只扫描这个容器（大页面快速定位） |
+| `maxElements` | integer | `280` | 最多扫描多少个可交互元素；大页面调小可提速 |
 
 返回：`{ ok, page, snapshot: { text, refs, refMap, count, frames, captcha, scroll, title, url, tabId, truncated, nextCursor } }`。
 
@@ -213,6 +218,7 @@ eval 默认关闭（allowEval=false）。如确需执行，请在 cordis.patch.y
 | `modifiers` | string[] | — | 修饰键 |
 | `ms` | integer | `1000` | `wait` 毫秒 |
 | `verify` | boolean | `true` | 动作后是否回读核验 |
+| `snapshot` | boolean | auto | 动作后是否附带快照。不传时 auto：页面变化或 click/type/press 等动作才附带；`false` 强制省略、`true` 强制附带 |
 | `state` | string | `visible` | `waitFor` 元素状态：`attached` / `visible` / `hidden` / `detached` |
 | `urlPattern` | string | — | `waitFor` 要等待的 URL 通配符或正则 |
 | `responseUrl` | string | — | `waitFor` 要等待的响应 URL 片段 |
@@ -256,7 +262,7 @@ eval 默认关闭（allowEval=false）。如确需执行，请在 cordis.patch.y
 
 ## `browser_batch`
 
-一次调用顺序执行多步，减少「点一下 → 看一眼结果」的往返。支持 `browser_act` 的全部动作，外加 `extract` 读内容。
+一次调用顺序执行多步，减少「点一下 → 看一眼结果」的往返。支持 `browser_act` 的全部动作，外加 `extract`（读内容）与 `goto`（导航）。
 
 | 参数 | 类型 | 默认 | 说明 |
 |---|---|---|---|
@@ -269,6 +275,7 @@ eval 默认关闭（allowEval=false）。如确需执行，请在 cordis.patch.y
 每步可用字段：
 
 - 动作：`action`、`label`、`ref` / `selector` / `text` / `container` / `nth`、`value`、`key`、`submit`、`clear`、`ms`、`state`、`urlPattern`、`responseUrl`、`timeoutMs`；
+- 导航：`action: "goto"` + `url`（可选 `waitUntil`、`timeoutMs`）；
 - `verify`：默认 `false`（批量默认关闭逐步回读以换取速度，需要时可单步打开）；
 - 提取：`action: "extract"` + `mode` / `selector` / `itemSelector` / `labels` / `fields` / `maxChars` / `offset` / `limit`。
 

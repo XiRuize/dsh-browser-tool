@@ -84,3 +84,25 @@ node test/forum-live.mjs iloveswufe 120
 每页服务端上限约 12 条；`count` 调大无效，提速靠**版块级并发**（默认 3，可到 6）。
 
 可见翻页（`watch:true`）：二手 100 条 / 18 次滚动 / 40s，窗口里能看到滚动加载。
+
+## 0.7.7：交互延迟（定位 / 截取 / 翻页）
+
+复现：`npm run test:perf`（本地测试页、headless、关闭 HUD）。下表是同机改前/改后：
+
+| 操作 | 0.7.6 | 0.7.7 | 关键改动 |
+|---|---|---|---|
+| `browser_act` scroll | 443ms | **219–268ms** | 多次滚动只等一个 80ms 沉降；`detectNewTab` 先看页数再等 |
+| `browser_act` click | 422ms | **240ms** | 同上 |
+| `browser_snapshot` 限定 `selector`（无交互元素） | 330ms | **15ms** | 限定区域时不再为“0 个元素”白等 300ms |
+| `browser_paginate` 3 页 | 577ms | **463ms** | 变化轮询 150→60ms、沉降 120→80ms、loadState 上限 5s→1.5s |
+| `browser_paginate` 每页均摊 | 191ms | **154ms** | 同上 |
+| `browser_batch` goto+extract | — | **54ms** | 新增 `goto` 步骤，一次调用完成跳转+提取 |
+| `browser_screenshot` 视口 / 整页 | 150 / 540ms | **113 / 485ms** | 视口截图优先；整页截图天然更慢 |
+
+另外：
+
+- `navigateSettleMs` 默认 120 → **60ms**；
+- `browser_act` 默认 **auto 快照**：只有页面变化或 click/type/press 等动作才附带快照；scroll/hover/wait/check 不再背 8KB 快照；
+- `browser_open` 支持 `snapshot:false`（只为跳转）与 `snapshotSelector`（只扫局部）。
+
+仍无法消除的固定成本：Edge **冷启动 ~3–5s**（浏览器常驻后不再发生，`idleCloseMs=0`）；论坛/交易所首次 HTTPS 建连偶发 3–5s。

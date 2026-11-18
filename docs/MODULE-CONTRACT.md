@@ -105,6 +105,14 @@ export async function runSiteTool({ manager, page, sites, siteId, tool, args })
 
 约束：`paginate` 在点击前记录 URL 与页面文本签名，点击后必须等到其一变化再抓下一页（URL 先变、DOM 后到时还要等 `domcontentloaded` 与可选 `waitSelector`）；「下一页」启发式只在文本/aria/title 命中语义后才考虑分页容器加分，避免把 `page-item` 之类条目链接误判。清单工具复用 `extractPage` + `boundExtractResult`，`browser_forum` 与 `browser_site siteId=qq-forum` 走同一实现。
 
+## 性能约定（0.7.7）
+
+- `browser_act` 的 `snapshot` 缺省为 **auto**：仅当 `pageChanged` / 新标签页 / 动作属于 `click,type,press,back,forward,reload,dialog` 时才抓快照；实现里不得再无条件 `captureForTool`。
+- `captureForTool` 的空白页重试只在**整页**（无 `selector`）且 `count===0` 时触发，等待 250ms；限定 selector 时不得再等待。
+- `detectNewTab` 必须先比较 `contextPages().length`，只有页数增加才 sleep（80ms）。
+- 导航沉降默认 `navigateSettleMs=60`；批量/翻页等循环内禁止累计式固定 sleep（滚动多次只等一个 80ms）。
+- 基线命令：`npm run test:perf`；改动后延迟不得明显回退（参考 `docs/performance.md` 的 0.7.7 表）。
+
 ## `BrowserManager` 门面（`lib/manager.js`）
 
 保留旧 API，新增多代理 API。旧工具 `lib/tools.js` 在 tools-surface 完成前要尽量继续可加载。

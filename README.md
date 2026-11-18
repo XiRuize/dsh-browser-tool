@@ -2,11 +2,11 @@
 
 给 [DeepSeek Harness](https://github.com/deepseek-ai) 的浏览器操作插件：一个可长期驻留、默认后台静默的真实 Edge / Chromium 浏览器，加上面向「浏览 → 定位 → 提取 → 存证 → 批处理」的工具面。
 
-![status](https://img.shields.io/badge/status-0.7.6%20published-brightgreen)
+![status](https://img.shields.io/badge/status-0.7.7%20ready-orange)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![runtime](https://img.shields.io/badge/runtime-Node.js%2020%2B%20%7C%2022-339933)
 
-> **版本状态**：`0.7.6` 已发布到 GitHub（借鉴 nuwa-browser：`browser_paginate` 自动翻页 + `browser_site` 站点工具注册表，CI 通过）。23 个工具：分层观测、多步批处理、自动翻页、站点工具、工作区、静默/非静默切换、HTTP 快通道、QQ 论坛采集、临时暂存区与 F12 前端工作流。`0.1.0` 是初始基线，版本演进见 [`CHANGELOG.md`](CHANGELOG.md)。
+> **版本状态**：`0.7.7` 已就绪（交互提速：定位/截取/翻页）。23 个工具：分层观测、多步批处理、自动翻页、站点工具、工作区、静默/非静默切换、HTTP 快通道、QQ 论坛采集、临时暂存区与 F12 前端工作流。`0.1.0` 是初始基线，版本演进见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ## 定位
 
@@ -85,6 +85,20 @@ C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
 
 安装完成后，profile 的 Cordis 组合中应出现 `browser-tool` 条目；若工具列表没有 `browser_*`，见 [`docs/installation.md`](docs/installation.md) 与 [`docs/troubleshooting.md`](docs/troubleshooting.md)。
 
+## 性能（0.7.7）
+
+同机本地页基准（`npm run test:perf`，headless、关闭 HUD）：
+
+| 操作 | 改前 | 改后 |
+|---|---|---|
+| `browser_act` scroll / click | 443 / 422ms | **~220 / ~240ms** |
+| `browser_snapshot` 限定 selector（无交互元素） | 330ms | **15ms** |
+| `browser_paginate` 3 页 | 577ms | **463ms（154ms/页）** |
+| `browser_batch` goto+extract | — | **54ms** |
+| `browser_screenshot` 视口 / 整页 | 150 / 540ms | 113 / 485ms |
+
+要点：`browser_act` 默认 auto 快照（scroll/hover/wait 不再背 8KB 快照）；`browser_snapshot` 支持 `selector` 局部定位；`browser_open` 支持 `snapshot:false`；`browser_batch` 支持 `goto`，一次调用完成「跳转 → 操作 → 提取」。唯一躲不掉的固定成本是 Edge 冷启动 3–5s，浏览器常驻后不再发生。完整记录见 [`docs/performance.md`](docs/performance.md)。
+
 ## 配置
 
 配置写在 bundle 的 `cordis.patch.yml`，由插件在 `apply(ctx, rawConfig)` 中通过 `lib/config.js` 的 `resolveConfig` 归一化；插件**不导出 `Config` / `ConfigSchema`**，Loader 直接把原始 config 交给 `apply`。下表是当前版本的默认值：
@@ -106,7 +120,7 @@ C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
 | `navigationTimeoutMs` | `45000` | 页面导航超时 |
 | `launchTimeoutMs` | `30000` | 单次浏览器启动超时（`launchPersistentContext`） |
 | `launchDeadlineMs` | `55000` | 启动+全部重试的总预算，应小于工具层超时（快照 45s / 截图 60s / `browser_open` 90s） |
-| `navigateSettleMs` | `120` | 导航后短沉降，替代固定 sleep(450) |
+| `navigateSettleMs` | `60` | 导航后短沉降，替代固定 sleep(450)；SPA 需要时调大 |
 | `navigateWaitSelector` | 空 | 导航后等待某选择器出现（适合必须水合的 SPA） |
 | `collectRetries` | `2` | 单条导航/请求重试次数 |
 | `collectPageReuse` | `true` | 采集 worker 复用常驻标签页 |
@@ -154,12 +168,12 @@ C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
 
 | 工具 | 用途 | 状态 |
 |---|---|---|
-| `browser_open` | 打开 / 复用标签页，静默返回快照；`focus` 默认 false | 已实现 |
-| `browser_snapshot` | 可操作结构快照（带 `@eN`），是 `browser_observe` 的 **structure 层兼容别名** | 已实现 |
+| `browser_open` | 打开 / 复用标签页，静默返回快照；`focus` 默认 false；`snapshot:false` 只为跳转、`snapshotSelector` 只扫局部 | 已实现 |
+| `browser_snapshot` | 可操作结构快照（带 `@eN`），支持 `selector` / `maxElements` 局部快速定位 | 已实现 |
 | `browser_observe` | 按层观测：structure / text / visual / network / console / meta | 已实现 |
 | `browser_inspect` | DOM / HTML / CSS / a11y / 资源 / 存储 / 性能 / eval | 已实现 |
-| `browser_act` | click / type / press / scroll / select / check / hover / drag / upload / back / forward / reload / wait / waitFor / dialog；默认回读核验；`label` 显示在页面角标 | 已实现 |
-| `browser_batch` | 一次调用顺序执行 ≤50 步（act 全部动作 + extract），失败即停并带回已完成步骤；可见模式显示进度角标 | 已实现 |
+| `browser_act` | click / type / press / scroll / select / check / hover / drag / upload / back / forward / reload / wait / waitFor / dialog；默认回读核验；`label` 显示在页面角标；`snapshot` 默认 auto（页面变化或 click/type 才带快照） | 已实现 |
+| `browser_batch` | 一次调用顺序执行 ≤50 步（act 全部动作 + extract + goto），失败即停并带回已完成步骤；可见模式显示进度角标 | 已实现 |
 | `browser_paginate` | 自动识别「下一页」并一次抓 N 页（默认 5，上限 20）；无下一页/无变化提前停止，records 合并，完整结果落盘 | 已实现 |
 | `browser_site` | 站点工具注册表：list / match / run；内置 qq-forum，清单来自 `<siteToolsDir>/*.json` | 已实现 |
 | `browser_extract` | text / html / links / tables / labeled / structured / **records** / markdown / images / forms | 已实现 |
