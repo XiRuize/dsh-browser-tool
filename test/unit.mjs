@@ -22,6 +22,8 @@ import { BrowserManager } from '../lib/manager.js'
 import { isRecoverableError, launchHint } from '../lib/host.js'
 import { BATCH_ACTIONS, normalizeSteps } from '../lib/batch.js'
 import { hudText, shouldShowHud } from '../lib/hud.js'
+import { normalizePaginateOptions, countExtract } from '../lib/paginate.js'
+import { describeSites, loadSiteTools, matchUrl, normalizeManifest } from '../lib/site-tools.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const tmpRoot = path.join(here, '.tmp')
@@ -995,7 +997,77 @@ test('resolveConfig 显性表示默认值与上下界', () => {
   assert.equal(resolveConfig({ actionHudTtlMs: 999999 }).actionHudTtlMs, 30000)
 })
 
-test('tools.js 注册 21 个工具、schema 合法、并发安全分类与旧参数键齐全', () => {
+test('normalizePaginateOptions 默认值、上下界与 records 校验', () => {
+  const base = normalizePaginateOptions({})
+  assert.equal(base.maxPages, 5)
+  assert.equal(base.waitMs, 8000)
+  assert.equal(base.timeoutMs, 120000)
+  assert.deepEqual(base.extract, {})
+  assert.equal(base.next, null)
+
+  assert.equal(normalizePaginateOptions({ maxPages: 99 }).maxPages, 20)
+  assert.equal(normalizePaginateOptions({ maxPages: 0 }).maxPages, 1)
+  assert.equal(normalizePaginateOptions({ waitMs: 100 }).waitMs, 500)
+  assert.equal(normalizePaginateOptions({ next: '#next' }).next.selector, '#next')
+  assert.deepEqual(normalizePaginateOptions({ next: { text: '下一页', nth: 0 } }).next, { text: '下一页', nth: 0 })
+  assert.equal(normalizePaginateOptions({ mode: 'records', itemSelector: 'li.item' }).extract.itemSelector, 'li.item')
+
+  assert.throws(() => normalizePaginateOptions({ mode: 'records' }), /itemSelector/)
+  assert.throws(() => normalizePaginateOptions({ next: {} }), /selector \/ ref \/ text/)
+  assert.throws(() => normalizePaginateOptions({ next: 42 }), /next 只能是/)
+
+  assert.equal(countExtract({ data: [1, 2, 3] }), 3)
+  assert.equal(countExtract({ text: 'abc' }), 1)
+  assert.equal(countExtract(null), 0)
+})
+
+test('site-tools 清单校验、URL 匹配与目录加载', async () => {
+  const manifest = normalizeManifest({
+    id: 'example-hr',
+    name: '示例招聘',
+    match: ['hr.example.com', '/jobs/'],
+    tools: { list: { mode: 'records', itemSelector: '.job', description: '抓列表' } },
+  }, 'example-hr.json')
+  assert.equal(manifest.errors, undefined)
+  assert.equal(manifest.site.id, 'example-hr')
+  assert.equal(manifest.site.tools.list.itemSelector, '.job')
+
+  assert.ok(normalizeManifest({ id: 'x' }, 'bad.json').errors.length >= 1)
+  assert.ok(normalizeManifest({ id: 'ok-id', match: ['a.com'], tools: { list: { mode: 'records' } } }, 'bad2.json').errors.length >= 1)
+  assert.ok(normalizeManifest('nope', 'bad3.json').errors.length >= 1)
+
+  assert.equal(matchUrl('https://HR.example.com/jobs/1', manifest.site), true)
+  assert.equal(matchUrl('https://other.com/', manifest.site), false)
+  assert.equal(matchUrl('https://a.com/x', { match: ['/a\\.com/'] }), true)
+
+  const dir = path.join(tmpRoot, 'site-tools-unit')
+  await fs.mkdir(dir, { recursive: true })
+  await fs.writeFile(
+    path.join(dir, 'ok.json'),
+    JSON.stringify({
+      id: 'local-jobs',
+      name: '本地面试',
+      match: ['/list'],
+      tools: { rows: { mode: 'records', itemSelector: '.item', fields: { title: 'h3' } } },
+    }),
+    'utf8',
+  )
+  await fs.writeFile(path.join(dir, 'broken.json'), '{ not json', 'utf8')
+  const loaded = await loadSiteTools(dir)
+  assert.ok(loaded.sites.some(site => site.id === 'qq-forum' && site.source === 'builtin'))
+  assert.ok(loaded.sites.some(site => site.id === 'local-jobs' && site.source === 'manifest'))
+  assert.equal(loaded.errors.length, 1)
+  const described = describeSites(loaded.sites)
+  const local = described.find(site => site.id === 'local-jobs')
+  assert.deepEqual(local.tools.map(tool => tool.name), ['rows'])
+
+  // 目录不存在时只返回内置站点，不抛错。
+  const missing = await loadSiteTools(path.join(tmpRoot, 'no-such-dir'))
+  assert.ok(missing.sites.length >= 1)
+  assert.equal(missing.errors.length, 0)
+})
+
+test('tools.js 注册 23 个工具、schema 合法、并发安全分类与旧参数键齐全', () => {
   const config = resolveConfig({ artifactDir: path.join(tmpRoot, 'tools-artifacts') })
   const tools = new Map()
   const fakeCtx = {
@@ -1017,6 +1089,8 @@ test('tools.js 注册 21 个工具、schema 合法、并发安全分类与旧参
     'browser_inspect',
     'browser_act',
     'browser_batch',
+    'browser_paginate',
+    'browser_site',
     'browser_extract',
     'browser_screenshot',
     'browser_tabs',
@@ -1033,7 +1107,7 @@ test('tools.js 注册 21 个工具、schema 合法、并发安全分类与旧参
     'browser_close',
     'browser_status',
   ]
-  assert.equal(tools.size, 21)
+  assert.equal(tools.size, 23)
   assert.deepEqual([...tools.keys()].sort(), expectedNames.slice().sort())
 
   for (const [name, tool] of tools) {

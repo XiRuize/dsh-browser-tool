@@ -36,6 +36,7 @@
   idleCloseMs, watchdogIntervalMs, autoRelaunch,
   maxTabs, maxIdleTabs, idleTabMs,
   actionHud, actionHudTtlMs,
+  siteToolsDir,
   allowEval, allowAbsoluteArtifacts,
   networkMaxEntries, networkMaxBodyChars
 }
@@ -80,6 +81,29 @@ export async function hideHud(page)
 ```
 
 约束：HUD 宿主元素固定带 `data-dsh-hud`，`snapshot.js` 的 `walk()` 必须跳过它；HUD 内部用 Shadow DOM，页面 `innerText` 不包含角标文本。`runBatch` 中每步默认 `verify: false`（速度为先），需要时单步开启；提取步骤复用 `extractPage` + `boundExtractResult`，超限时用 `manager.saveText` 落盘。
+
+## 翻页与站点工具（`lib/paginate.js`、`lib/site-tools.js`）
+
+```js
+// paginate.js —— 自动识别下一页并逐页提取（一次调用）
+export const PAGINATE_MAX_PAGES                // 20
+export function normalizePaginateOptions(args) // { maxPages, waitMs, timeoutMs, extract, next, waitSelector, save }
+export function countExtract(extract)          // records/links 取数组长度，否则 1/0
+export async function paginate(manager, state, options, { config, exec })
+// 返回 { ok, pages:[{page,url,title,extract}], items, stoppedReason, ms }
+// stoppedReason: 'no-next' | 'no-change' | 'max-pages' | 'timeout'
+
+// site-tools.js —— 内置适配器 + 声明式清单
+export const BUILTIN_SITES                     // 目前含 qq-forum/collect
+export function normalizeManifest(raw, file)   // { site } 或 { errors }
+export async function loadSiteTools(dir)       // { sites, errors }，目录缺失不算错
+export function matchUrl(url, site)            // 子串或 /正则/
+export function matchSites(url, sites)
+export function describeSites(sites)
+export async function runSiteTool({ manager, page, sites, siteId, tool, args })
+```
+
+约束：`paginate` 在点击前记录 URL 与页面文本签名，点击后必须等到其一变化再抓下一页（URL 先变、DOM 后到时还要等 `domcontentloaded` 与可选 `waitSelector`）；「下一页」启发式只在文本/aria/title 命中语义后才考虑分页容器加分，避免把 `page-item` 之类条目链接误判。清单工具复用 `extractPage` + `boundExtractResult`，`browser_forum` 与 `browser_site siteId=qq-forum` 走同一实现。
 
 ## `BrowserManager` 门面（`lib/manager.js`）
 

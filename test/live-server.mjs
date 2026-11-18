@@ -85,6 +85,20 @@ ${Array.from(
 ).join('')}
 </ul></body></html>`
 
+function pagedPage(pageNo) {
+  const items = Array.from({ length: 3 }, (_, index) => {
+    const n = (pageNo - 1) * 3 + index + 1
+    return `<li class="page-item"><h3 class="page-title">第${pageNo}页条目${n}</h3><a class="page-link" href="/detail?n=${n}">查看</a></li>`
+  }).join('')
+  const prev = pageNo > 1 ? `<a class="prev" href="/paged?page=${pageNo - 1}">上一页</a>` : ''
+  const next =
+    pageNo < 3
+      ? `<a class="next" href="/paged?page=${pageNo + 1}">下一页</a>`
+      : '<span class="next disabled" aria-disabled="true">下一页</span>'
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>分页列表 第${pageNo}页</title></head>
+<body><h1>分页列表</h1><ul id="page-items">${items}</ul><nav class="pagination">${prev}${next}</nav></body></html>`
+}
+
 function json(response, value) {
   response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
   response.end(JSON.stringify(value))
@@ -112,6 +126,10 @@ export async function startLocalServer() {
     }
     if (url.pathname === '/detail') return html(response, detail)
     if (url.pathname === '/list') return html(response, list)
+    if (url.pathname === '/paged') {
+      const pageNo = Math.min(3, Math.max(1, Number(url.searchParams.get('page')) || 1))
+      return html(response, pagedPage(pageNo))
+    }
     if (url.pathname === '/frame') return html(response, frame)
     return html(response, page)
   })

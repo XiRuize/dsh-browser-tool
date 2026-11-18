@@ -2,11 +2,11 @@
 
 给 [DeepSeek Harness](https://github.com/deepseek-ai) 的浏览器操作插件：一个可长期驻留、默认后台静默的真实 Edge / Chromium 浏览器，加上面向「浏览 → 定位 → 提取 → 存证 → 批处理」的工具面。
 
-![status](https://img.shields.io/badge/status-0.7.5%20published-brightgreen)
+![status](https://img.shields.io/badge/status-0.7.6%20ready-orange)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![runtime](https://img.shields.io/badge/runtime-Node.js%2020%2B%20%7C%2022-339933)
 
-> **版本状态**：`0.7.5` 已发布到 GitHub（借鉴 nuwa-browser：`browser_batch` 一次调用多步执行 + 可见模式操作角标，CI 通过）。21 个工具：分层观测、多步批处理、工作区、静默/非静默切换、HTTP 快通道、QQ 论坛分页、临时暂存区与 F12 前端工作流。`0.1.0` 是初始基线，版本演进见 [`CHANGELOG.md`](CHANGELOG.md)。
+> **版本状态**：`0.7.6` 已就绪（借鉴 nuwa-browser：`browser_paginate` 自动翻页 + `browser_site` 站点工具注册表）。23 个工具：分层观测、多步批处理、自动翻页、站点工具、工作区、静默/非静默切换、HTTP 快通道、QQ 论坛采集、临时暂存区与 F12 前端工作流。`0.1.0` 是初始基线，版本演进见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ## 定位
 
@@ -125,6 +125,7 @@ C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
 | `idleTabMs` | `600000` | 空闲页回收阈值（10 分钟） |
 | `actionHud` | `true` | 可见模式（window/offscreen）下是否在页面角落显示操作角标；headless 永远不显示 |
 | `actionHudTtlMs` | `4000` | 角标自动消失时间（500–30000） |
+| `siteToolsDir` | `~/.dsh/browser-tool/site-tools` | 站点工具清单目录（`*.json`，内置适配器始终可用） |
 | `allowEval` | `false` | 是否允许 `browser_inspect` 的 `eval` 模式 |
 | `allowAbsoluteArtifacts` | `false` | 是否允许产物写到 `artifactDir` 之外的绝对路径 |
 | `networkMaxEntries` | `80` | 网络记录条数上限 |
@@ -159,6 +160,8 @@ C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
 | `browser_inspect` | DOM / HTML / CSS / a11y / 资源 / 存储 / 性能 / eval | 已实现 |
 | `browser_act` | click / type / press / scroll / select / check / hover / drag / upload / back / forward / reload / wait / waitFor / dialog；默认回读核验；`label` 显示在页面角标 | 已实现 |
 | `browser_batch` | 一次调用顺序执行 ≤50 步（act 全部动作 + extract），失败即停并带回已完成步骤；可见模式显示进度角标 | 已实现 |
+| `browser_paginate` | 自动识别「下一页」并一次抓 N 页（默认 5，上限 20）；无下一页/无变化提前停止，records 合并，完整结果落盘 | 已实现 |
+| `browser_site` | 站点工具注册表：list / match / run；内置 qq-forum，清单来自 `<siteToolsDir>/*.json` | 已实现 |
 | `browser_extract` | text / html / links / tables / labeled / structured / **records** / markdown / images / forms | 已实现 |
 | `browser_screenshot` | 页面 / 元素 / 整页截图 | 已实现 |
 | `browser_tabs` | list / switch / close / claim / release | 已实现 |
@@ -197,6 +200,8 @@ browser-tool/
 │  ├─ artifacts.js          # 产物库与 manifest
 │  ├─ act.js                # 动作与回读核验
 │  ├─ batch.js              # 一次调用多步执行（动作序列 + extract）
+│  ├─ paginate.js           # 自动识别下一页 + 一次抓 N 页
+│  ├─ site-tools.js         # 站点工具注册表（内置适配器 + 声明式清单）
 │  ├─ hud.js                # 可见模式下的页面操作角标（Shadow DOM）
 │  ├─ extract.js            # 提取（含 records 数组模式）
 │  ├─ network.js            # 网络捕获（含请求体）
@@ -206,7 +211,7 @@ browser-tool/
 │  ├─ clean.js              # HTML/文本清洗
 │  ├─ devtools.js           # F12 式抓取与清洗
 │  ├─ adapters/qq-forum.js  # QQ 论坛适配器（游标分页 + bkn）
-│  ├─ tools.js              # 工具注册（21 个工具）
+│  ├─ tools.js              # 工具注册（23 个工具）
 │  └─ util.js               # 工具函数
 ├─ docs/
 │  ├─ MODULE-CONTRACT.md    # 实现子代理之间的接口契约
@@ -221,6 +226,7 @@ browser-tool/
 ├─ skills/
 │  ├─ browser-field-ops/    # Agent Skill：浏览器分段协作流程
 │  └─ qq-forum/             # Agent Skill：QQ 论坛采集
+├─ examples/site-tools/     # browser_site 清单示例（放到 siteToolsDir 即生效）
 ├─ scripts/qq-forum/        # 一次性运营脚本（不进 CI）
 ├─ test/                    # unit / e2e / deep / docs / bench
 ├─ .github/                 # CI 与 issue / PR 模板
@@ -249,7 +255,7 @@ browser-tool/
 - Canvas、封闭 Shadow DOM、纯视觉内容无法可靠结构化，用截图与网络兜底。
 - 多个子代理共享同一 Chromium context，标签页与内存需要上限和回收。
 - Windows 下 `offscreen` 窗口仍可能出现在任务栏；默认用 `headless`。
-- 工具面以 21 个 `browser_*` 工具为准；接口契约见 [`docs/MODULE-CONTRACT.md`](docs/MODULE-CONTRACT.md)，版本演进见 [`CHANGELOG.md`](CHANGELOG.md)。
+- 工具面以 23 个 `browser_*` 工具为准；接口契约见 [`docs/MODULE-CONTRACT.md`](docs/MODULE-CONTRACT.md)，版本演进见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ## 验证命令
 

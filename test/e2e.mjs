@@ -82,6 +82,8 @@ try {
   })
   check(config.visibility === 'headless', 'resolveConfig 使用 headless')
   check(config.idleCloseMs === 0, 'idleCloseMs=0')
+  // 站点工具清单放到临时目录，避免污染真实 ~/.dsh/browser-tool/site-tools。
+  config.siteToolsDir = path.join(tmpRoot, 'site-tools-e2e')
 
   manager = new BrowserManager(config)
   const tools = new Map()
@@ -225,6 +227,68 @@ try {
   const headlessPage = await manager.resolvePage('active', 'e2e-lead')
   const headlessHud = await headlessPage.page.evaluate(() => Boolean(document.querySelector('[data-dsh-hud]')))
   check(headlessHud === false, 'headless 模式不注入 HUD')
+
+  step = 'browser_paginate 自动识别下一页并抓多页'
+  const pagedOpened = await call('browser_open', { url: `${base}/paged?page=1`, newTab: true })
+  const pagedTab = pagedOpened.page.tab
+  const paged = await call('browser_paginate', {
+    tab: pagedTab,
+    maxPages: 5,
+    mode: 'records',
+    selector: '#page-items',
+    itemSelector: 'li.page-item',
+    fields: { title: 'h3', link: { selector: 'a', attr: 'href' } },
+  })
+  check(paged.totalPages === 3, 'paginate 抓到 3 页')
+  check(paged.items.length === 9, 'paginate 合并 9 条')
+  check(paged.stoppedReason === 'no-next', 'paginate 在无下一页时停止')
+  check((paged.pages[2]?.title || '').includes('第3页'), 'paginate 第 3 页标题正确')
+  check(Boolean(paged.savedPath), 'paginate 把完整结果落盘')
+
+  const pagedLimited = await call('browser_paginate', {
+    tab: pagedTab,
+    maxPages: 1,
+    mode: 'text',
+    selector: '#page-items',
+  })
+  check(pagedLimited.totalPages === 1 && pagedLimited.stoppedReason === 'max-pages', 'paginate 按 maxPages 提前停止')
+
+  step = 'browser_site 站点工具注册表（list/match/run）'
+  const siteDir = config.siteToolsDir
+  await fs.mkdir(siteDir, { recursive: true })
+  await fs.writeFile(
+    path.join(siteDir, 'local-jobs.json'),
+    JSON.stringify({
+      id: 'local-jobs',
+      name: '本地分页列表',
+      match: ['/paged'],
+      tools: {
+        rows: {
+          description: '抓分页列表条目',
+          mode: 'records',
+          selector: '#page-items',
+          itemSelector: 'li.page-item',
+          fields: { title: 'h3' },
+        },
+      },
+    }),
+    'utf8',
+  )
+  const siteList = await call('browser_site', { action: 'list' })
+  check(siteList.sites.some(site => site.id === 'qq-forum' && site.source === 'builtin'), 'site list 含内置 qq-forum')
+  check(siteList.sites.some(site => site.id === 'local-jobs'), 'site list 含清单工具')
+  const siteMatch = await call('browser_site', { action: 'match', url: `${base}/paged?page=1` })
+  check(siteMatch.matches.some(site => site.id === 'local-jobs'), 'site match 命中清单站点')
+  const siteRun = await call('browser_site', { action: 'run', siteId: 'local-jobs', tool: 'rows', tab: pagedTab })
+  check(siteRun.count === 3, 'site run 清单工具返回 3 条')
+  check(/第\d页条目/.test(JSON.stringify(siteRun.extract?.data || '')), 'site run 返回条目内容')
+  let siteUnknown = ''
+  try {
+    await call('browser_site', { action: 'run', siteId: 'nope', tool: 'rows' })
+  } catch (error) {
+    siteUnknown = String(error?.message || error)
+  }
+  check(/没有找到站点工具/.test(siteUnknown), 'site run 未知站点给出可读错误')
 
   step = 'browser_screenshot'
   const shot = await call('browser_screenshot', { path: 'e2e-shot.png', fullPage: false, tab: mainTab })

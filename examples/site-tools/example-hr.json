@@ -1,0 +1,25 @@
+{
+  "id": "example-hr",
+  "name": "示例招聘站点",
+  "match": ["hr.example.com", "/jobs/"],
+  "tools": {
+    "list": {
+      "description": "抓招聘列表（records：每条记录一个对象）",
+      "url": "https://hr.example.com/jobs",
+      "mode": "records",
+      "selector": "#job-list",
+      "itemSelector": ".job-item",
+      "fields": {
+        "title": "h3",
+        "company": ".company",
+        "link": { "selector": "a", "attr": "href" }
+      },
+      "maxChars": 30000
+    },
+    "detail": {
+      "description": "在当前详情页提取正文与关键字段（不自动跳转）",
+      "mode": "labeled",
+      "labels": ["职位名称", "薪资", "工作地点"]
+    }
+  }
+}

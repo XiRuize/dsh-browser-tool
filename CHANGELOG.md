@@ -2,6 +2,25 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。本文件只记录真实发生或明确标记为「进行中」的变更，不把计划写成已发布事实。
 
+## [未发布] — 0.7.6（自动翻页 + 站点工具注册表）
+
+继续借鉴 nuwa-browser：把「翻页」和「站点能力」从一次性脚本提升为一等工具。
+
+### 新增
+
+- **`browser_paginate`**：在列表页上自动找「下一页」（`rel=next` → `<link rel=next>` → 文本/aria 启发式，排除 `上一页` 与 disabled 控件），一次调用抓 N 页（默认 5，上限 20）。点击前记录 URL 与页面文本签名，点击后等任一变化，并补等 `domcontentloaded` 与可选 `waitSelector`；没有下一页 / 点击无变化 / 超预算会提前停止并给出 `stoppedReason`。records/links 自动合并各页条目并标注 `page`，完整结果默认落盘 JSON。
+- **`browser_site`**：站点工具注册表。`action=list` 列出内置适配器与清单工具，`match` 按 URL 命中，`run` 执行 `siteId+tool`。清单来自 `siteToolsDir/*.json`（声明式提取：url/selector/itemSelector/fields…），校验失败只影响该文件并随 `list` 返回错误；内置 `qq-forum` 的 `collect` 与 `browser_forum` 共享同一实现。
+
+### 配置
+
+- 新增 `siteToolsDir`（默认 `~/.dsh/browser-tool/site-tools`）。
+
+### 测试
+
+- 单元 29/29：`normalizePaginateOptions`（默认值/上下界/records 校验/next 规范化/countExtract）、站点清单校验与 URL 匹配、目录加载容错、工具数 21 → 23。
+- e2e 104 assertions（新增 12 条）：本地 `/paged` 三页列表自动翻页（3 页 / 9 条 / `no-next` 停止 / 落盘）、`maxPages` 提前停止、site list/match/run（含未知站点可读错误）。
+- 修复启发式误判：分页容器里的普通条目链接（class 含 `page-item`）曾因容器加分被当成「下一页」，现在必须先命中「下一页/next/older」语义才参与打分。
+
 ## [未发布] — 0.7.5（多步批处理 + 显性表示）
 
 借鉴 [nuwa-browser](https://www.npmjs.com/package/@nuwax-ai/nuwa-browser-mcp) 的两个设计：一次调用跑多步脚本，以及让人能直接看见 agent 在做什么。

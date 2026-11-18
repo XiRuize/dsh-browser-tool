@@ -1,6 +1,6 @@
 # 工具参考（tools）
 
-当前工具面共 21 个工具（基线工具 + `browser_observe`、`browser_inspect`、`browser_batch`、`browser_workspace`、`browser_show`、`browser_fetch`、`browser_forum`、`browser_capture`、`browser_scratch`、`browser_devtools`、`browser_status`）。参数、默认值与返回结构以 `lib/tools.js` 及各实现模块为准；真实 Edge 端到端验收仍待 install-verify 完成（见 [`install-verification.md`](install-verification.md)）。
+当前工具面共 23 个工具（基线工具 + `browser_observe`、`browser_inspect`、`browser_batch`、`browser_paginate`、`browser_site`、`browser_workspace`、`browser_show`、`browser_fetch`、`browser_forum`、`browser_capture`、`browser_scratch`、`browser_devtools`、`browser_status`）。参数、默认值与返回结构以 `lib/tools.js` 及各实现模块为准；真实 Edge 端到端验收仍待 install-verify 完成（见 [`install-verification.md`](install-verification.md)）。
 
 ## 通用约定
 
@@ -292,6 +292,42 @@ eval 默认关闭（allowEval=false）。如确需执行，请在 cordis.patch.y
 
 ---
 
+## `browser_paginate`
+
+在列表页上连续翻页并逐页提取，一次调用完成「下一页 → 等待 → 提取」循环。
+
+| 参数 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `tab` | string | 当前页 | 起始列表页 |
+| `next` | object | 自动识别 | 显式下一页控件：`selector` / `ref` / `text` / `container` / `nth` |
+| `maxPages` | integer | `5` | 最多翻几页，上限 `20` |
+| `waitMs` | integer | `8000` | 每次翻页后等待 URL/内容变化的上限 |
+| `waitSelector` | string | — | 翻页后等待该选择器出现再抓（异步渲染列表用） |
+| `mode` | string | `text` | 逐页提取模式，同 `browser_extract` |
+| `selector` / `container` / `itemSelector` / `labels` / `fields` / `maxChars` / `offset` / `limit` | — | — | 透传给逐页提取 |
+| `save` | boolean | `true` | 完整结果落盘 JSON |
+| `timeoutMs` | integer | `120000` | 整次分页总预算，上限 `290000` |
+
+自动识别顺序：`a[rel~=next]` → `<link rel=next>` 的 href → 文本/aria/title 命中「下一页 / 下页 / next / older / › / »」的可见控件（分页容器内加分，`上一页` 与 disabled 控件排除）。
+
+停止原因 `stoppedReason`：`no-next`（没有下一页）、`no-change`（点击后 URL 与内容都没变）、`max-pages`（页数上限）、`timeout`（总预算耗尽）。
+
+返回：
+
+```json
+{
+  "ok": true,
+  "totalPages": 3,
+  "pages": [{ "page": 1, "url": "...", "title": "分页列表 第1页", "mode": "records", "count": 3, "preview": "..." }],
+  "items": [{ "title": "第1页条目1", "page": 1 }],
+  "stoppedReason": "no-next",
+  "ms": 1820,
+  "savedPath": ".../paginate-20261118_143500.json"
+}
+```
+
+---
+
 ## `browser_extract`
 
 | 参数 | 类型 | 默认 | 说明 |
@@ -538,6 +574,44 @@ HTTP 快通道：复用当前浏览器上下文的 Cookie / UA / Referer 直接�
 
 每条帖子返回 `post_id / author_tinyid / author_nick / posted_at / text / link`。
 作者 `tiny_id` 由帖子 id 反解（`1441152` + 11 位），不依赖接口。
+---
+
+## `browser_site`
+
+站点工具注册表（内置适配器 + 声明式清单）。
+
+| 参数 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `action` | string | `list` | `list` / `match` / `run` |
+| `tab` | string | 当前页 | `match`/`run` 时使用 |
+| `url` | string | 当前页 | `match` 的目标 URL |
+| `siteId` | string | — | `run` 必填，例如 `qq-forum` |
+| `tool` | string | — | `run` 必填 |
+| `args` | object | `{}` | 工具参数 |
+| `save` | boolean | `false` | `run` 结果落盘 JSON |
+
+清单放在 `siteToolsDir`（默认 `~/.dsh/browser-tool/site-tools`），一个文件一个站点：
+
+```json
+{
+  "id": "example-hr",
+  "name": "示例招聘",
+  "match": ["hr.example.com", "/jobs/"],
+  "tools": {
+    "list": {
+      "description": "抓招聘列表",
+      "url": "https://hr.example.com/jobs",
+      "mode": "records",
+      "selector": "#job-list",
+      "itemSelector": ".job-item",
+      "fields": { "title": "h3", "link": { "selector": "a", "attr": "href" } }
+    }
+  }
+}
+```
+
+内置站点：`qq-forum`（工具 `collect`，与 `browser_forum` 同一实现）。`match` 支持子串（不区分大小写）与 `/正则/` 两种写法；清单工具可省略 `url`，直接在 `tab` 当前页上提取。清单校验失败不会影响其它站点，错误会随 `list` 返回。
+
 ---
 
 ## `browser_show`
