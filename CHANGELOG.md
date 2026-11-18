@@ -2,6 +2,24 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。本文件只记录真实发生或明确标记为「进行中」的变更，不把计划写成已发布事实。
 
+## [未发布] — 0.7.5（多步批处理 + 显性表示）
+
+借鉴 [nuwa-browser](https://www.npmjs.com/package/@nuwax-ai/nuwa-browser-mcp) 的两个设计：一次调用跑多步脚本，以及让人能直接看见 agent 在做什么。
+
+### 新增
+
+- **`browser_batch`**：一次调用顺序执行 ≤50 步，支持 `browser_act` 的全部动作加 `extract`。某步失败默认立即停止，并在错误里带回已完成步骤与失败位置；`stopOnError=false` 可继续执行并汇总。整批默认预算 120s（上限 175s），替代「点一下 → 看一眼 → 再点」的多轮往返。
+- **`label` 显性表示**：`browser_act` 与 `browser_batch` 的每一步都可带可读名称；可见模式（`window` / `offscreen`）下在页面右下角显示 Shadow DOM 角标「DSH · 第 N/M 步 · 动作」，失败转为红色。headless 下完全不注入，保持静默；角标带 `data-dsh-hud`，快照与提取自动忽略，不污染内容。
+
+### 配置
+
+- 新增 `actionHud`（默认 `true`）与 `actionHudTtlMs`（默认 `4000`，范围 500–30000）。
+
+### 测试
+
+- 单元：`normalizeSteps` 白名单/截断/extract 字段清理、`hudText`/`shouldShowHud` 纯函数、`actionHud` 配置默认值与上下界；工具数 20 → 21。
+- e2e（92 assertions，新增 10 条）：批量「填写 → 点击 → 提取」一次调用成功、失败即停带回已完成步骤、headless 不注入 HUD、window 模式注入且显示 label、Shadow DOM 隔离、快照不含 HUD 文本。
+
 ## [未发布] — 0.7.4（启动预算与错误提示修复）
 
 ### 修复

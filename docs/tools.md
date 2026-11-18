@@ -1,6 +1,6 @@
 # 工具参考（tools）
 
-当前工具面共 20 个工具（基线工具 + `browser_observe`、`browser_inspect`、`browser_workspace`、`browser_show`、`browser_fetch`、`browser_forum`、`browser_capture`、`browser_scratch`、`browser_devtools`、`browser_status`）。参数、默认值与返回结构以 `lib/tools.js` 及各实现模块为准；真实 Edge 端到端验收仍待 install-verify 完成（见 [`install-verification.md`](install-verification.md)）。
+当前工具面共 21 个工具（基线工具 + `browser_observe`、`browser_inspect`、`browser_batch`、`browser_workspace`、`browser_show`、`browser_fetch`、`browser_forum`、`browser_capture`、`browser_scratch`、`browser_devtools`、`browser_status`）。参数、默认值与返回结构以 `lib/tools.js` 及各实现模块为准；真实 Edge 端到端验收仍待 install-verify 完成（见 [`install-verification.md`](install-verification.md)）。
 
 ## 通用约定
 
@@ -251,6 +251,44 @@ eval 默认关闭（allowEval=false）。如确需执行，请在 cordis.patch.y
 `verify` 可能包含：`urlChanged`、`titleChanged`、`newTab`、`newTabUrl`、`dialog`、`exists`、`visible`、`value`、`checked`、`selected`、`aria`、`response`、`notes`。动作打开新标签页时，返回会自动切到新页并重新快照。
 
 错误语义：引用过期 → 「ref 已失效，请重新快照」；元素不可见/被遮挡 → 返回 Playwright 原因 + 建议滚动或 `waitFor`；reader 角色 → 「当前工作区角色为 reader，不能执行写操作」；锁超时 → 明确提示；`upload` 文件不存在 → 明确路径错误。
+
+---
+
+## `browser_batch`
+
+一次调用顺序执行多步，减少「点一下 → 看一眼结果」的往返。支持 `browser_act` 的全部动作，外加 `extract` 读内容。
+
+| 参数 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `tab` | string | 当前页 | 目标标签页 |
+| `label` | string | — | 整批操作名称（结果显示，可见模式下也用于角标） |
+| `steps` | array | 必填 | 1–50 步；每步至少 `action`，定位字段与 `browser_act` 相同 |
+| `stopOnError` | boolean | `true` | 某步失败是否立即停止；`false` 时继续并汇总 |
+| `timeoutMs` | integer | `120000` | 整批总预算，上限 `175000` |
+
+每步可用字段：
+
+- 动作：`action`、`label`、`ref` / `selector` / `text` / `container` / `nth`、`value`、`key`、`submit`、`clear`、`ms`、`state`、`urlPattern`、`responseUrl`、`timeoutMs`；
+- `verify`：默认 `false`（批量默认关闭逐步回读以换取速度，需要时可单步打开）；
+- 提取：`action: "extract"` + `mode` / `selector` / `itemSelector` / `labels` / `fields` / `maxChars` / `offset` / `limit`。
+
+返回：
+
+```json
+{
+  "ok": true,
+  "label": "翻到第 2 页并读列表",
+  "steps": [
+    { "index": 1, "action": "click", "label": "下一页", "ok": true, "ms": 132, "message": "已点击 @e7。" },
+    { "index": 2, "action": "extract", "ok": true, "ms": 88, "extract": { "mode": "text", "text": "..." } }
+  ],
+  "extract": { "mode": "text", "text": "...", "truncated": false, "savedPath": null },
+  "ms": 220,
+  "page": { "tab": "t1", "url": "https://example.com/list?page=2" }
+}
+```
+
+错误语义：失败时抛出 `第 N/M 步（action）失败：原因 已完成 K 步：…`，便于模型只补失败的那一步。可见模式（`window` / `offscreen`）下页面右下角会出现「DSH · N/M · label」角标，失败变红；`headless` 下不注入。
 
 ---
 

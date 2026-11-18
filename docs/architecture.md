@@ -33,7 +33,7 @@ flowchart LR
     Act["act / extract"]
     Net["network / collect"]
     Art["ArtifactStore + manifest"]
-    Tools["tools.js: 20 个工具"]
+    Tools["tools.js: 21 个工具"]
   end
 
   subgraph External["外部"]
@@ -74,6 +74,8 @@ flowchart LR
 | Observe | `structure` / `text` / `visual` / `network` / `console` / `meta` 分层观测 | `lib/observe.js`、`lib/snapshot.js` |
 | Inspect | DOM / HTML / CSS / a11y / box / resources / scripts / storage / console / performance / eval | `lib/inspect.js` |
 | Act | 动作执行、回读核验、`@eN` / selector / container / nth | `lib/act.js` |
+| Batch | 一次调用多步执行（act 动作 + extract），失败即停并保留已完成步骤 | `lib/batch.js` |
+| HUD | 可见模式下页面角落的操作角标（Shadow DOM，headless 跳过） | `lib/hud.js` |
 | Extract | text / html / links / tables / labeled / structured / markdown / images / forms | `lib/extract.js` |
 | Network | 请求/响应环形缓冲、HAR 导出 | `lib/network.js` |
 | Collect | cursor + checkpoint 的可续跑批处理 | `lib/collect.js` |

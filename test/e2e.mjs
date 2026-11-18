@@ -192,6 +192,40 @@ try {
     'container 限定重复选项 select（value + label）',
   )
 
+  step = 'browser_batch 多步动作 + extract（一次调用）'
+  const batched = await call('browser_batch', {
+    label: 'E2E 批量',
+    tab: mainTab,
+    steps: [
+      { action: 'type', selector: '#q', value: '批量测试', label: '填写公司名' },
+      { action: 'click', selector: '#go', label: '点击查询' },
+      { action: 'extract', mode: 'text', selector: '#out', label: '读取结果' },
+    ],
+  })
+  check(batched.ok === true && batched.steps.length === 3, 'batch 返回 3 步')
+  check(batched.steps.every(item => item.ok), 'batch 全部步骤成功')
+  check(batched.extract?.text?.includes('查询:批量测试'), 'batch extract 读到动作结果')
+  check(batched.ms > 0, 'batch 返回耗时')
+
+  let batchFailure = null
+  try {
+    await call('browser_batch', {
+      tab: mainTab,
+      steps: [{ action: 'click', selector: '#go' }, { action: 'click', selector: '#not-exist-e2e' }],
+    })
+  } catch (error) {
+    batchFailure = String(error?.message || error)
+  }
+  check(
+    /第 2\/2 步/.test(batchFailure || '') && /已完成 1 步/.test(batchFailure || ''),
+    'batch 失败即停并带回已完成步骤',
+  )
+
+  step = '显性表示：headless 不注入 HUD'
+  const headlessPage = await manager.resolvePage('active', 'e2e-lead')
+  const headlessHud = await headlessPage.page.evaluate(() => Boolean(document.querySelector('[data-dsh-hud]')))
+  check(headlessHud === false, 'headless 模式不注入 HUD')
+
   step = 'browser_screenshot'
   const shot = await call('browser_screenshot', { path: 'e2e-shot.png', fullPage: false, tab: mainTab })
   check(shot.bytes > 1000, `screenshot 字节数 ${shot.bytes}`)
@@ -332,6 +366,32 @@ try {
   check(showStatus.visibility === 'headless' && showStatus.headless === true, 'show status 报告 headless')
   const toWindow = await call('browser_show', { action: 'set', visibility: 'window', restoreTabs: false })
   check(toWindow.changed === true && toWindow.visibility === 'window', 'show set 切到 window')
+
+  step = '显性表示：window 模式注入 HUD 且快照不污染'
+  const hudOpened = await call('browser_open', { url: base, newTab: true })
+  const hudTab = hudOpened.page.tab
+  await call('browser_act', {
+    action: 'type',
+    selector: '#q',
+    value: '角标',
+    label: '窗口模式角标',
+    tab: hudTab,
+  })
+  const hudPage = await manager.resolvePage(hudTab, 'e2e-lead')
+  const hudInfo = await hudPage.page.evaluate(() => {
+    const host = document.querySelector('[data-dsh-hud]')
+    if (!host) return null
+    return {
+      shadow: Boolean(host.shadowRoot),
+      text: host.shadowRoot?.querySelector('.txt')?.textContent || '',
+    }
+  })
+  check(Boolean(hudInfo), 'window 模式注入 HUD')
+  check(hudInfo?.shadow === true, 'HUD 使用 Shadow DOM 隔离样式')
+  check((hudInfo?.text || '').includes('窗口模式角标'), 'HUD 显示动作 label')
+  const hudSnapshot = await call('browser_snapshot', { tab: hudTab })
+  check(!hudSnapshot.snapshot.text.includes('窗口模式角标'), '快照不包含 HUD 文本')
+
   const shown = await call('browser_show', { action: 'show' })
   check(shown.shown === true, 'show 把窗口拉到前台')
   const hidden = await call('browser_show', { action: 'hide' })

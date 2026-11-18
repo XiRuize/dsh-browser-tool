@@ -35,12 +35,13 @@
   collectConcurrency, collectDelayMs, collectRenderWaitMs,
   idleCloseMs, watchdogIntervalMs, autoRelaunch,
   maxTabs, maxIdleTabs, idleTabMs,
+  actionHud, actionHudTtlMs,
   allowEval, allowAbsoluteArtifacts,
   networkMaxEntries, networkMaxBodyChars
 }
 ```
 
-硬性默认值：`visibility='headless'`、`idleCloseMs=0`、`watchdogIntervalMs=30000`、`autoRelaunch=true`、`maxTabs=24`、`allowEval=false`、`allowAbsoluteArtifacts=false`、`launchTimeoutMs=30000`、`launchDeadlineMs=55000`。`headless` 只作为兼容别名，最终看 `visibility`。启动总预算应小于工具层超时（快照 45000、截图/网络 60000、`browser_open` 90000），否则调用会先被工具层中止而底层启动仍在继续。
+硬性默认值：`visibility='headless'`、`idleCloseMs=0`、`watchdogIntervalMs=30000`、`autoRelaunch=true`、`maxTabs=24`、`allowEval=false`、`allowAbsoluteArtifacts=false`、`actionHud=true`、`actionHudTtlMs=4000`、`launchTimeoutMs=30000`、`launchDeadlineMs=55000`。`headless` 只作为兼容别名，最终看 `visibility`。启动总预算应小于工具层超时（快照 45000、截图/网络 60000、`browser_open` 90000），否则调用会先被工具层中止而底层启动仍在继续。
 
 ## `BrowserHost`（`lib/host.js`）
 
@@ -60,6 +61,25 @@ export class BrowserHost extends EventEmitter {
 ```
 
 事件：`launched`（`{ context, browser }`）、`page`（`page`）、`disconnected`（`reason`）、`recovered`（`{ attempt }`）。`ensure()` 在已断开时自动重启一次；重启后重新发出 `launched`。**禁止调用 `page.bringToFront()`，除非调用方显式要求可见。**
+
+## 多步批处理与显性表示（`lib/batch.js`、`lib/hud.js`）
+
+```js
+// batch.js
+export const BATCH_ACTIONS         // act 的全部动作 + 'extract'
+export function normalizeSteps(value, { maxSteps = 50 })   // 校验/规范化，错误为中文
+export async function runBatch(manager, state, steps, { config, exec, stopOnError = true, timeoutMs = 120000 })
+// 成功: { ok: true, steps, extract, ms }
+// 失败: throw Error，error.batch = { steps, extract, failedAt, ms }（已完成步骤不得丢弃）
+
+// hud.js（可见模式的页面角标，headless 自动跳过）
+export function hudText({ label, step, total, tone })       // 'DSH · 2/5 · 翻页'
+export function shouldShowHud({ config, url, closed })      // 纯函数，便于单测
+export async function showHud(page, { label, step, total, tone }, config)  // 失败静默 false
+export async function hideHud(page)
+```
+
+约束：HUD 宿主元素固定带 `data-dsh-hud`，`snapshot.js` 的 `walk()` 必须跳过它；HUD 内部用 Shadow DOM，页面 `innerText` 不包含角标文本。`runBatch` 中每步默认 `verify: false`（速度为先），需要时单步开启；提取步骤复用 `extractPage` + `boundExtractResult`，超限时用 `manager.saveText` 落盘。
 
 ## `BrowserManager` 门面（`lib/manager.js`）
 

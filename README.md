@@ -2,11 +2,11 @@
 
 给 [DeepSeek Harness](https://github.com/deepseek-ai) 的浏览器操作插件：一个可长期驻留、默认后台静默的真实 Edge / Chromium 浏览器，加上面向「浏览 → 定位 → 提取 → 存证 → 批处理」的工具面。
 
-![status](https://img.shields.io/badge/status-0.7.4%20published-brightgreen)
+![status](https://img.shields.io/badge/status-0.7.5%20ready-orange)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![runtime](https://img.shields.io/badge/runtime-Node.js%2020%2B%20%7C%2022-339933)
 
-> **版本状态**：`0.7.4` 已发布到 GitHub（启动预算收敛 + 启动失败提示修复，CI 通过）。20 个工具：分层观测、工作区、静默/非静默切换、HTTP 快通道、QQ 论坛分页、临时暂存区与 F12 前端工作流。`0.1.0` 是初始基线，版本演进见 [`CHANGELOG.md`](CHANGELOG.md)。
+> **版本状态**：`0.7.5` 已就绪（借鉴 nuwa-browser：`browser_batch` 一次调用多步执行 + 可见模式操作角标）。21 个工具：分层观测、多步批处理、工作区、静默/非静默切换、HTTP 快通道、QQ 论坛分页、临时暂存区与 F12 前端工作流。`0.1.0` 是初始基线，版本演进见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ## 定位
 
@@ -123,6 +123,8 @@ C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
 | `maxTabs` | `24` | 标签页上限 |
 | `maxIdleTabs` | `8` | 空闲标签页上限 |
 | `idleTabMs` | `600000` | 空闲页回收阈值（10 分钟） |
+| `actionHud` | `true` | 可见模式（window/offscreen）下是否在页面角落显示操作角标；headless 永远不显示 |
+| `actionHudTtlMs` | `4000` | 角标自动消失时间（500–30000） |
 | `allowEval` | `false` | 是否允许 `browser_inspect` 的 `eval` 模式 |
 | `allowAbsoluteArtifacts` | `false` | 是否允许产物写到 `artifactDir` 之外的绝对路径 |
 | `networkMaxEntries` | `80` | 网络记录条数上限 |
@@ -155,7 +157,8 @@ C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
 | `browser_snapshot` | 可操作结构快照（带 `@eN`），是 `browser_observe` 的 **structure 层兼容别名** | 已实现 |
 | `browser_observe` | 按层观测：structure / text / visual / network / console / meta | 已实现 |
 | `browser_inspect` | DOM / HTML / CSS / a11y / 资源 / 存储 / 性能 / eval | 已实现 |
-| `browser_act` | click / type / press / scroll / select / check / hover / drag / upload / back / forward / reload / wait / waitFor / dialog；默认回读核验 | 已实现 |
+| `browser_act` | click / type / press / scroll / select / check / hover / drag / upload / back / forward / reload / wait / waitFor / dialog；默认回读核验；`label` 显示在页面角标 | 已实现 |
+| `browser_batch` | 一次调用顺序执行 ≤50 步（act 全部动作 + extract），失败即停并带回已完成步骤；可见模式显示进度角标 | 已实现 |
 | `browser_extract` | text / html / links / tables / labeled / structured / **records** / markdown / images / forms | 已实现 |
 | `browser_screenshot` | 页面 / 元素 / 整页截图 | 已实现 |
 | `browser_tabs` | list / switch / close / claim / release | 已实现 |
@@ -193,6 +196,8 @@ browser-tool/
 │  ├─ inspect.js            # 深层前端检查
 │  ├─ artifacts.js          # 产物库与 manifest
 │  ├─ act.js                # 动作与回读核验
+│  ├─ batch.js              # 一次调用多步执行（动作序列 + extract）
+│  ├─ hud.js                # 可见模式下的页面操作角标（Shadow DOM）
 │  ├─ extract.js            # 提取（含 records 数组模式）
 │  ├─ network.js            # 网络捕获（含请求体）
 │  ├─ collect.js            # 可续跑批处理 + 暂存区 + 工作页复用
@@ -201,7 +206,7 @@ browser-tool/
 │  ├─ clean.js              # HTML/文本清洗
 │  ├─ devtools.js           # F12 式抓取与清洗
 │  ├─ adapters/qq-forum.js  # QQ 论坛适配器（游标分页 + bkn）
-│  ├─ tools.js              # 工具注册（20 个工具）
+│  ├─ tools.js              # 工具注册（21 个工具）
 │  └─ util.js               # 工具函数
 ├─ docs/
 │  ├─ MODULE-CONTRACT.md    # 实现子代理之间的接口契约
@@ -244,7 +249,7 @@ browser-tool/
 - Canvas、封闭 Shadow DOM、纯视觉内容无法可靠结构化，用截图与网络兜底。
 - 多个子代理共享同一 Chromium context，标签页与内存需要上限和回收。
 - Windows 下 `offscreen` 窗口仍可能出现在任务栏；默认用 `headless`。
-- 工具面以 20 个 `browser_*` 工具为准；接口契约见 [`docs/MODULE-CONTRACT.md`](docs/MODULE-CONTRACT.md)，版本演进见 [`CHANGELOG.md`](CHANGELOG.md)。
+- 工具面以 21 个 `browser_*` 工具为准；接口契约见 [`docs/MODULE-CONTRACT.md`](docs/MODULE-CONTRACT.md)，版本演进见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ## 验证命令
 

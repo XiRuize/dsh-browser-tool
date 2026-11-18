@@ -20,6 +20,8 @@ import { ScratchStore } from '../lib/scratch.js'
 import { registerBrowserTools } from '../lib/tools.js'
 import { BrowserManager } from '../lib/manager.js'
 import { isRecoverableError, launchHint } from '../lib/host.js'
+import { BATCH_ACTIONS, normalizeSteps } from '../lib/batch.js'
+import { hudText, shouldShowHud } from '../lib/hud.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const tmpRoot = path.join(here, '.tmp')
@@ -940,7 +942,60 @@ test('collectUrls deadline 到达时优雅返回 nextCursor 并保存 checkpoint
 // tools.js 工具面
 // ---------------------------------------------------------------------------
 
-test('tools.js 注册 20 个工具、schema 合法、并发安全分类与旧参数键齐全', () => {
+test('normalizeSteps 校验与规范化（动作白名单、label 截断、extract 去动作字段）', () => {
+  const steps = normalizeSteps([
+    { action: 'click', ref: '@e3', label: '  翻到第 2 页  ' },
+    { action: 'waitfor', selector: '#out' },
+    { action: 'extract', mode: 'text', selector: '#out', verify: true, state: 'visible', label: '读取结果' },
+  ])
+  assert.equal(steps.length, 3)
+  assert.equal(steps[0].label, '翻到第 2 页')
+  assert.equal(steps[1].action, 'waitFor')
+  assert.equal(steps[2].action, 'extract')
+  assert.equal(steps[2].verify, undefined, 'extract 步不应携带 verify')
+  assert.equal(steps[2].state, undefined, 'extract 步不应携带 state')
+  // 动作白名单包含 act 的全部动作与 extract。
+  assert.ok(BATCH_ACTIONS.includes('extract'))
+  assert.ok(BATCH_ACTIONS.includes('click'))
+  assert.ok(BATCH_ACTIONS.includes('waitFor'))
+
+  const longLabel = normalizeSteps([{ action: 'click', selector: '#go', label: 'x'.repeat(120) }])[0].label
+  assert.equal(longLabel.length, 80)
+  assert.equal(normalizeSteps([{ action: 'click', selector: '#go', label: '   ' }])[0].label, undefined)
+
+  assert.throws(() => normalizeSteps('not-array'), /steps 必须是数组/)
+  assert.throws(() => normalizeSteps([]), /steps 不能为空/)
+  assert.throws(() => normalizeSteps([null]), /第 1 步必须是对象/)
+  assert.throws(() => normalizeSteps([{ selector: '#go' }]), /第 1 步缺少 action/)
+  assert.throws(() => normalizeSteps([{ action: 'hack' }]), /不受支持/)
+  assert.throws(() => normalizeSteps(Array.from({ length: 51 }, () => ({ action: 'wait', ms: 100 }))), /最多 50 步/)
+})
+
+test('hudText / shouldShowHud：进度文案与「只在可见模式显示」', () => {
+  assert.equal(hudText({ label: '翻页', step: 2, total: 5 }), 'DSH · 2/5 · 翻页')
+  assert.equal(hudText({ label: '翻页' }), 'DSH · 翻页')
+  assert.equal(hudText({ tone: 'error' }), 'DSH · 操作失败')
+  assert.equal(hudText({ label: 'x'.repeat(200), step: 1, total: 1 }).length <= 90, true)
+
+  assert.equal(shouldShowHud({ config: { visibility: 'headless' }, url: 'https://example.com' }), false)
+  assert.equal(shouldShowHud({ config: { visibility: 'window' }, url: 'https://example.com' }), true)
+  assert.equal(shouldShowHud({ config: { visibility: 'offscreen' }, url: 'http://127.0.0.1:1/' }), true)
+  assert.equal(shouldShowHud({ config: { visibility: 'window' }, url: 'about:blank' }), false)
+  assert.equal(shouldShowHud({ config: { visibility: 'window', actionHud: false }, url: 'https://a.com' }), false)
+  assert.equal(shouldShowHud({ config: { visibility: 'window' }, url: 'https://a.com', closed: true }), false)
+})
+
+test('resolveConfig 显性表示默认值与上下界', () => {
+  const config = resolveConfig({})
+  assert.equal(config.actionHud, true)
+  assert.equal(config.actionHudTtlMs, 4000)
+  assert.equal(resolveConfig({ actionHud: false }).actionHud, false)
+  assert.equal(resolveConfig({ actionHud: 'false' }).actionHud, false)
+  assert.equal(resolveConfig({ actionHudTtlMs: 1 }).actionHudTtlMs, 500)
+  assert.equal(resolveConfig({ actionHudTtlMs: 999999 }).actionHudTtlMs, 30000)
+})
+
+test('tools.js 注册 21 个工具、schema 合法、并发安全分类与旧参数键齐全', () => {
   const config = resolveConfig({ artifactDir: path.join(tmpRoot, 'tools-artifacts') })
   const tools = new Map()
   const fakeCtx = {
@@ -961,6 +1016,7 @@ test('tools.js 注册 20 个工具、schema 合法、并发安全分类与旧参
     'browser_observe',
     'browser_inspect',
     'browser_act',
+    'browser_batch',
     'browser_extract',
     'browser_screenshot',
     'browser_tabs',
@@ -977,7 +1033,7 @@ test('tools.js 注册 20 个工具、schema 合法、并发安全分类与旧参
     'browser_close',
     'browser_status',
   ]
-  assert.equal(tools.size, 20)
+  assert.equal(tools.size, 21)
   assert.deepEqual([...tools.keys()].sort(), expectedNames.slice().sort())
 
   for (const [name, tool] of tools) {
