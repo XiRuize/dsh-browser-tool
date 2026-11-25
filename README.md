@@ -2,11 +2,11 @@
 
 给 [DeepSeek Harness](https://github.com/deepseek-ai) 的浏览器操作插件：一个可长期驻留、默认后台静默的真实 Edge / Chromium 浏览器，加上面向「浏览 → 定位 → 提取 → 存证 → 批处理」的工具面。
 
-![status](https://img.shields.io/badge/status-0.9.0%20ready-orange)
+![status](https://img.shields.io/badge/status-0.9.0%20published-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![runtime](https://img.shields.io/badge/runtime-Node.js%2020%2B%20%7C%2022-339933)
 
-> **0.9.0（反拦截通道）**：`browser_fetch` 新增 curl 引擎（浏览器 TLS/UA、绕系统代理、Cookie jar）与 mentis 系门户的表单哈希签名（sha256 → `encparam` + `hashval`），403/429/安全页统一识别为 `blocked` 并给下一步建议。工具面仍为 18 个。
+> **0.9.0（反拦截通道，已发布）**：`browser_fetch` 新增 curl 引擎（浏览器 TLS/UA、绕系统代理、Cookie jar）与 mentis 系门户的表单哈希签名（sha256 → `encparam` + `hashval`），403/429/安全页统一识别为 `blocked` 并给下一步建议。工具面仍为 18 个。
 >
 > **0.8.0（提速版）**：工具面 23 → 18，每请求 schema 27.8KB → 21.0KB（≈8.7k → 6.6k tokens，−24%）；新增内容缓存（命中 0–2ms）与精简回包（`detail=compact`）。
 >
