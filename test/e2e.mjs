@@ -364,6 +364,22 @@ try {
   check(cachedFetch.cached === true && String(cachedFetch.body).includes('91310000TEST'), 'fetch 命中内容缓存')
   const refreshedFetch = await call('browser_fetch', { url: `${base}/api/company`, refresh: true })
   check(refreshedFetch.cached !== true, 'fetch refresh 绕过缓存')
+
+  step = 'browser_fetch curl 引擎 + 表单哈希签名 + 拦截识别'
+  const signed = await call('browser_fetch', {
+    engine: 'curl',
+    url: `${base}/sign-page`,
+    cache: false,
+    sign: { kind: 'form-hash', page: `${base}/sign-page` },
+  })
+  check(signed.status === 200 && signed.json?.ok === true, 'curl + form-hash 签名通过服务端校验')
+  check(String(signed.sign?.hashval || '').length === 64, '返回 64 位 hashval')
+  const plainCurl = await call('browser_fetch', { engine: 'curl', url: `${base}/api/company`, cache: false })
+  check(plainCurl.status === 200 && plainCurl.engine === 'curl' && plainCurl.json?.creditCode === '91310000TEST', 'curl 引擎直取 JSON')
+  const blocked = await call('browser_fetch', { engine: 'curl', url: `${base}/api/block`, cache: false })
+  check(blocked.blocked === true, '拦截页标记 blocked')
+  check(/403|Security|NCGR/.test(String(blocked.blockReason || '') + String(blocked.error || '')), 'blocked 带原因')
+  check(/建议/.test(String(blocked.hint || '')), 'blocked 带下一步建议')
   await call('browser_open', { url: `${base}/list`, tab: mainTab })
   const records = await call('browser_read', { source: 'extract',
     mode: 'records',

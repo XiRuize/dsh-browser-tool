@@ -24,6 +24,9 @@ import { BATCH_ACTIONS, normalizeSteps } from '../lib/batch.js'
 import { compareFillText, pickTextMatch, squashWhitespace } from '../lib/act.js'
 import { classifyHumanCheck, describeHumanCheck } from '../lib/human-check.js'
 import { ContentCache, cacheableResponse, stableStringify } from '../lib/cache.js'
+import { buildCurlArgs, DEFAULT_UA } from '../lib/http-curl.js'
+import { detectBlock, blockHint } from '../lib/block-detect.js'
+import { applyOverrides, buildFormBody, buildFormHash, findFormAction, parseFormFields } from '../lib/form-sign.js'
 import { hudText, shouldShowHud } from '../lib/hud.js'
 import { normalizePaginateOptions, countExtract } from '../lib/paginate.js'
 import { describeSites, loadSiteTools, matchUrl, normalizeManifest } from '../lib/site-tools.js'
@@ -1070,6 +1073,85 @@ test('site-tools 清单校验、URL 匹配与目录加载', async () => {
   assert.equal(missing.errors.length, 0)
 })
 
+test('form-sign：复现 createFormHash（排除项/勾选/select/多值/query）', () => {
+  const html = [
+    '<form action="/submit?q=9">',
+    '<input type="text" name="a" value="1">',
+    '<input type="text" name="b" value="2">',
+    '<input type="hidden" name="encparam" value="">',
+    '<input type="hidden" name="hashval" value="">',
+    '<input type="checkbox" name="c" value="on" checked>',
+    '<input type="checkbox" name="d" value="off">',
+    '<select name="s"><option value="Z2">Z2</option><option value="Z1" selected>Z1</option></select>',
+    '</form>',
+  ].join('')
+  const fields = parseFormFields(html)
+  assert.equal(fields.length, 7)
+  const { encparam, hashval, values } = buildFormHash(fields, { actionUrl: '/submit?q=9' })
+  assert.equal(values, '12onZ1')
+  assert.equal(encparam, 'a,b,c,d,s')
+  assert.equal(hashval, createHash('sha256').update('12onZ1').digest('hex'))
+
+  const body = buildFormBody(fields, encparam, hashval)
+  assert.deepEqual(body.slice(-2), [['encparam', encparam], ['hashval', hashval]])
+  assert.ok(body.some(([k, v]) => k === 'a' && v === '1'))
+  assert.ok(!body.some(([k]) => k === 'd'), '未勾选 checkbox 不提交')
+
+  const multi = parseFormFields('<input name="m" value="1"><input name="m" value="2">')
+  assert.equal(buildFormHash(multi, { actionUrl: '/x?m=9' }).values, '129')
+
+  const crlf = buildFormHash([{ kind: 'input', name: 't', value: 'a\nb\r\nc', type: 'text', disabled: false, checked: false, id: '' }])
+  assert.equal(crlf.values, 'a b c')
+  assert.equal(crlf.hashval, createHash('sha256').update('a b c').digest('hex'))
+})
+
+test('form-sign：overrides 与 form action 解析', () => {
+  const fields = parseFormFields(
+    '<form action="/p"><input name="x" value="1"><select name="s"><option value="A">A</option><option value="B">B</option></select><input type="checkbox" name="c" value="on"></form>',
+  )
+  applyOverrides(fields, { x: '9', s: 'B', c: true })
+  const { values, encparam } = buildFormHash(fields, { actionUrl: 'https://a.test/p' })
+  // 实现与 createFormHash 一致：先遍历 input，再遍历 select
+  assert.equal(encparam, 'x,c,s')
+  assert.equal(values, '9onB')
+  assert.equal(findFormAction('<form action="/p">', 'https://a.test/x'), 'https://a.test/p')
+  assert.equal(findFormAction('<form>', 'https://a.test/x'), 'https://a.test/x')
+})
+
+test('http-curl：参数包含 TLS/UA/代理绕过与 Cookie jar', () => {
+  const args = buildCurlArgs({
+    url: 'https://x.test/a',
+    method: 'POST',
+    bodyFile: '/tmp/b',
+    headerFile: '/tmp/h',
+    outputFile: '/tmp/o',
+    cookieJar: '/tmp/j',
+    userAgent: 'UA-TEST',
+    referer: 'https://x.test/',
+    timeoutMs: 30000,
+    http2: true,
+  })
+  assert.ok(args.includes('--noproxy') && args.includes('*'))
+  assert.ok(args.includes('-A') && args.includes('UA-TEST'))
+  assert.ok(args.includes('-e') && args.includes('https://x.test/'))
+  assert.ok(args.includes('--http2') && args.includes('-L') && args.includes('--compressed'))
+  assert.ok(args.includes('-b') && args.includes('/tmp/j') && args.includes('-c'))
+  assert.ok(args.includes('--data-binary') && args.includes('@/tmp/b'))
+  assert.equal(args[args.length - 1], 'https://x.test/a')
+  assert.ok(args.includes('-w') && args.some(item => String(item).includes('<<<DSH_CURL_META>>>')))
+  assert.ok(DEFAULT_UA.includes('Chrome/'))
+})
+
+test('block-detect：安全页/限流/网络错误与建议', () => {
+  assert.equal(detectBlock({ status: 200, body: '<title>Security Page</title>' }).blocked, true)
+  assert.equal(detectBlock({ status: 403, body: '' }).blocked, true)
+  assert.equal(detectBlock({ status: 429, body: 'slow down' }).blocked, true)
+  assert.equal(detectBlock({ status: 200, body: '<html>ok</html>' }).blocked, false)
+  assert.equal(detectBlock({ status: 0, body: '' }).blocked, false)
+  assert.equal(detectBlock({ status: 200, body: 'NCGR', extraPatterns: ['NCGR'] }).blocked, true)
+  assert.match(blockHint('Cloudflare 人机验证', 'playwright'), /建议/)
+})
+
 test('ContentCache：稳定键、命中、清理与可缓存判定', async () => {
   const dir = path.join(tmpRoot, 'cache-unit')
   const cache = new ContentCache({ cacheDir: dir, cacheTtlMs: 60000, cacheMaxBytes: 1024 * 1024 })
@@ -1161,7 +1243,7 @@ test('tools.js 注册 18 个工具、schema 合法、并发安全分类与旧参
     browser_workspace: ['action', 'workspaceId', 'label', 'role', 'toAgent', 'tab', 'note'],
     browser_network: ['action', 'tab', 'urlPattern', 'resourceTypes', 'maxEntries', 'maxBodyChars', 'id', 'urlContains', 'maxChars'],
     browser_collect: ['urls', 'mode', 'selector', 'labels', 'fields', 'maxChars', 'limit', 'concurrency', 'delayMs', 'save', 'jobId', 'cursor', 'deadlineMs', 'checkpointPath'],
-    browser_fetch: ['url', 'method', 'headers', 'body', 'timeoutMs', 'retries', 'maxChars', 'save', 'cache', 'refresh'],
+    browser_fetch: ['url', 'method', 'headers', 'body', 'engine', 'cookieJar', 'referer', 'userAgent', 'sign', 'blockedPatterns', 'timeoutMs', 'retries', 'maxChars', 'save', 'cache', 'refresh'],
     browser_site: ['action', 'siteId', 'tool', 'args'],
     browser_show: ['action', 'visibility', 'tab', 'restoreTabs'],
     browser_scratch: ['action', 'jobId', 'path', 'maxChars'],

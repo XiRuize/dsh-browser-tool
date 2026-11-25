@@ -356,21 +356,43 @@
 
 ## `browser_fetch`
 
-HTTP 快通道：复用当前浏览器上下文的 Cookie / UA / Referer 直接发请求，不渲染页面。
+HTTP 通道：默认复用浏览器上下文的 Cookie / UA / Referer；可切换系统 curl 换 TLS 栈；支持 mentis 系表单哈希签名。
 
 | 参数 | 类型 | 默认 | 说明 |
 |---|---|---|---|
-| `url` | string | 必填 | 请求地址 |
+| `url` | string | 必填 | 请求地址；sign 模式下作为表单页地址 |
 | `method` | string | `GET` | `GET` / `POST` / `PUT` / `PATCH` / `DELETE` / `HEAD` |
-| `headers` | object | — | 额外请求头；Cookie 自动沿用浏览器上下文 |
+| `headers` | object | — | 额外请求头 |
 | `body` | string | — | 请求体 |
+| `engine` | string | `playwright` | `playwright` / `curl` / `auto`（被拦再换 curl） |
+| `cookieJar` | string | — | curl 的 Cookie jar（Netscape 格式） |
+| `referer` | string | — | curl 的 Referer |
+| `userAgent` | string | 桌面 Chrome | curl 的 UA |
+| `sign` | object | — | `{ kind: "form-hash", page?, action?, overrides?, excluded? }` |
+| `blockedPatterns` | string[] | — | 额外拦截特征（正则字符串） |
 | `timeoutMs` | integer | 配置值 | 超时毫秒 |
 | `retries` | integer | `2` | 网络错误重试次数 |
 | `maxChars` | integer | `20000` | 返回正文上限，超出落盘 |
 | `save` | boolean | `true` | 超长时是否落盘完整正文 |
+| `cache` | boolean | `true` | GET 是否走内容缓存 |
+| `refresh` | boolean | `false` | 强制绕过缓存 |
 
-返回 `{ ok, status, finalUrl, contentType, bytes, body, json, blocked, elapsedMs, retriesUsed, savedPath }`。
-`blocked=true` 表示命中 JS 挑战 / 验证码 / 401 / 403 / 429，应改用渲染路径。
+返回 `{ ok, status, finalUrl, contentType, bytes, body, json, blocked, blockReason, hint, sign, engine, elapsedMs, savedPath }`。
+`blocked=true` 时给出 `blockReason` 与 `hint`（换引擎 / 可见窗口 / CDP）。
+
+**表单哈希签名**（巴林/阿曼同族 mentis 框架）：
+
+```js
+browser_fetch {
+  engine: "curl",
+  url: "https://etendering.example/product/publicDashReplica",
+  sign: { kind: "form-hash", overrides: { tabFlag: "1", procCategory: "Z2" } }
+}
+```
+
+- 算法：按 DOM 顺序拼「非空表单值」→ `sha256` = `hashval`；字段名逗号连接 = `encparam`。
+- 排除项沿用 `FormValidate.js` 的名单（`encparam/hashval/controlList/...`）；未勾选 checkbox/radio 不提交；select 取当前选中项。
+- 缓存按 engine 区分；签名请求与 blocked 响应不写缓存。
 
 ---
 

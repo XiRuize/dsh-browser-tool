@@ -2,10 +2,12 @@
 
 Browser-operation plugin for [DeepSeek Harness](https://github.com/deepseek-ai): a long-lived, silent-by-default real Edge / Chromium browser plus a tool surface for *observe → locate → act → verify → extract → archive*.
 
-![status](https://img.shields.io/badge/status-0.8.2%20dev-brightgreen)
+![status](https://img.shields.io/badge/status-0.9.0%20ready-orange)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![runtime](https://img.shields.io/badge/runtime-Node.js%2020%2B%20%7C%2022-339933)
 
+> **0.9.0 (anti-blocking channel)**: `browser_fetch` gains a curl engine (browser TLS/UA, proxy bypass, cookie jar) and mentis-family form-hash signing (sha256 → `encparam` + `hashval`), plus unified `blocked` detection for 403/429/security pages. Still 18 tools.
+>
 > **0.8.0 (speed release)**: 18 tools instead of 23; tool schema per request 27.8KB → 21.0KB (≈8.7k → 6.6k tokens, −24%); content cache (0–2 ms hits) and compact replies.
 >
 > **Breaking changes**: `browser_observe` / `browser_inspect` / `browser_extract` / `browser_screenshot` → **`browser_read`**; `browser_batch` → **`browser_act.steps`**; `browser_forum` → **`browser_site`**. See the migration table below. Changelog: [`CHANGELOG.md`](CHANGELOG.md).
@@ -67,6 +69,7 @@ browser_fetch { url: "https://api.example.com/quote" }
 - **Long-running**: `idleCloseMs=0`, 30 s watchdog, auto-relaunch after disconnect, bounded launch budget (30 s per attempt / 55 s total), persistent login profile.
 - **Multi-subagent workspaces**: `browser_workspace` with `reader` / `writer` roles, per-tab read/write locks, leases, handoff notes, stable tab IDs.
 - **Unified read**: `browser_read` covers layers, deep inspection, extraction and screenshots; scoped by `selector` / `ref`, `detail=compact` keeps replies small and spills full content to `savedPath`.
+- **Anti-blocking channel**: `browser_fetch` can switch to a system curl engine (browser TLS/UA, `--noproxy`, cookie jar) and sign mentis-family forms (`sign: { kind: "form-hash" }`); blocked responses return a reason and next steps. Authorized targets only; no CAPTCHA bypass.
 - **Content cache**: `browser_fetch` caches GET 2xx text/JSON (skips Authorization and `no-store`), returns `cached:true` + `ageMs`; `browser_read` caching is opt-in (`cache:true`); `refresh:true` bypasses. TTL 1 h, 512 MB cap with mtime eviction.
 - **One call does more**: `browser_act.steps` (≤50 steps: act actions + `extract` + `goto`), `browser_paginate` (auto next-page, N pages), `browser_site` (site-tool registry, built-in `qq-forum` plus declarative manifests).
 - **Visible mode HUD**: in `window` / `offscreen`, `label` renders as a Shadow-DOM badge and is excluded from snapshots.

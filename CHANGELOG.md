@@ -2,6 +2,26 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。本文件只记录真实发生或明确标记为「进行中」的变更，不把计划写成已发布事实。
 
+## [未发布] — 0.9.0（反拦截通道：curl 引擎 + 表单哈希签名 + 拦截识别）
+
+借鉴 `dataroom/央企海外中标尽调` 里已实机跑通的取数方法（`tb_fetch.py` / `daily_tender_scan.py` / `FormValidate.js`）。
+
+### 新增
+
+- **`browser_fetch.engine`**：`playwright`（默认，复用登录 Cookie）/`curl`（系统 curl：浏览器 UA、`--noproxy '*'`、Cookie jar、Referer；HTTP/2 按 curl 能力自动降级）/`auto`（playwright 被拦再换 curl）。
+- **`browser_fetch.sign = { kind: "form-hash" }`**：复现 mentis 系门户 `createFormHash`——DOM 顺序拼非空值 → sha256；`encparam` 字段名；支持 `overrides`（字段覆盖）、`excluded`、action URL query 追加、未勾选 checkbox 不提交。返回 `sign.encparam/hashval/actionUrl`。
+- **拦截识别** `lib/block-detect.js`：403/429/Security Page/NCGR/F5/Cloudflare 统一 `blocked:true` + `blockReason` + `hint`；网络错误不误判。
+- 缓存按 engine 区分，签名请求不写缓存，blocked 响应不写缓存。
+
+### 边界
+
+- 只用于已授权目标，遵守 robots/ToS 与速率限制；**不做**验证码识别/绕过、不用于规避付费墙或封锁。详见 `SECURITY.md`。
+
+### 测试
+
+- unit 38/38：`buildFormHash`（排除项/勾选/select/多值/换行/query）、`overrides`、curl 参数、`detectBlock`。
+- e2e 129 assertions：本地 `/sign-page` → `/api/signed` 独立校验签名、curl 直取 JSON、`/api/block` 返回 blocked + 建议。
+
 ## [未发布] — 0.8.2（人机验证：识别 + 交给人的有效路径）
 
 问题：遇到验证码时，工具只丢一句「请人工处理」，但浏览器多半在 headless，人根本看不到窗口；

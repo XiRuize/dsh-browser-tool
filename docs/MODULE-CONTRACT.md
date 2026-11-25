@@ -121,6 +121,30 @@ export function cacheableResponse({ method, status, headers, body, requestHeader
 
 约定：只缓存 GET 2xx 文本/JSON；带 Authorization 或 `cache-control: no-store/private` 不缓存；`browser_fetch.cache` 默认开、`browser_read.cache` 默认关（页面可能变化，显式开启）；`refresh:true` 强制绕过。
 
+## 反拦截通道（`lib/http-curl.js`、`lib/form-sign.js`、`lib/block-detect.js`，0.9）
+
+```js
+// http-curl.js
+export function curlAvailable()               // 系统 curl 是否存在
+export function curlSupportsHttp2()           // Windows 自带 curl 可能没有 HTTP/2
+export function buildCurlArgs(options)        // 纯函数，便于单测
+export async function runCurl(options)        // {status, headers, body, contentType, bytes, elapsedMs, finalUrl}
+
+// form-sign.js —— 复现 FormValidate.js 的 createFormHash
+export const MENTIS_EXCLUDED_NAMES
+export function parseFormFields(html)         // DOM 顺序的 input/select/option
+export function buildFormHash(fields, { actionUrl, excluded })  // {encparam, hashval, values, names}
+export function buildFormBody(fields, encparam, hashval)        // URLSearchParams 可用的键值对
+export function applyOverrides(fields, overrides)
+export function findFormAction(html, baseUrl)
+
+// block-detect.js
+export function detectBlock({ status, headers, body, extraPatterns })  // {blocked, reason, kind}
+export function blockHint(reason, engine)
+```
+
+约定：`browser_fetch.engine` 默认 `playwright`，`curl` 只在显式选择或 `auto` 回退时启用；curl 的 `http2` 必须按 `curlSupportsHttp2()` 决定（否则 Windows 自带 curl 直接报错）。`sign` 请求不写缓存；`blocked` 响应不写缓存。边界见 `SECURITY.md`：仅授权目标、不做验证码绕过、遵守速率限制。
+
 ## 性能约定（0.7.7）
 
 - `browser_act` 的 `snapshot` 缺省为 **auto**：仅当 `pageChanged` / 新标签页 / 动作属于 `click,type,press,back,forward,reload,dialog` 时才抓快照；实现里不得再无条件 `captureForTool`。

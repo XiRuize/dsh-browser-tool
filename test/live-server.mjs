@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import http from 'node:http'
 
 /**
@@ -110,6 +111,49 @@ function pagedPage(pageNo) {
 <body><h1>分页列表</h1><ul id="page-items">${items}</ul><nav class="pagination">${prev}${next}</nav></body></html>`
 }
 
+
+const SIGN_PAGE = [
+  '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>签名表单</title></head>',
+  '<body><form action="/api/signed" method="post">',
+  '<input type="text" name="a" value="1">',
+  '<input type="text" name="b" value="2">',
+  '<input type="hidden" name="encparam" value="">',
+  '<input type="hidden" name="hashval" value="">',
+  '<input type="checkbox" name="c" value="on" checked>',
+  '<input type="checkbox" name="d" value="off">',
+  '<select name="s"><option value="Z2">Z2</option><option value="Z1" selected>Z1</option></select>',
+  '<button type="submit">提交</button>',
+  '</form></body></html>',
+].join('')
+
+// 与 lib/form-sign.js 相互独立的期望值：a=1,b=2,c=on,s=Z1 → "12onZ1"；encparam 含 d（未勾选也占名）
+const SIGN_EXPECT = { values: "12onZ1", encparam: "a,b,c,d,s" }
+
+function readBody(request) {
+  return new Promise(resolve => {
+    const chunks = []
+    request.on('data', chunk => chunks.push(chunk))
+    request.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
+  })
+}
+
+async function verifySigned(request, response) {
+  const raw = await readBody(request)
+  const params = new URLSearchParams(raw)
+  const hashval = params.getAll('hashval').pop() || ''
+  const encparam = params.getAll('encparam').pop() || ''
+  const expected = crypto.createHash('sha256').update(SIGN_EXPECT.values).digest('hex')
+  const ok = hashval === expected && encparam === SIGN_EXPECT.encparam
+  json(response, {
+    ok,
+    encparam,
+    hashval,
+    expectedHash: expected,
+    a: params.get('a'),
+    s: params.get('s'),
+    hasD: params.has('d'),
+  })
+}
 function json(response, value) {
   response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
   response.end(JSON.stringify(value))
@@ -140,6 +184,16 @@ export async function startLocalServer() {
     if (url.pathname === '/paged') {
       const pageNo = Math.min(3, Math.max(1, Number(url.searchParams.get('page')) || 1))
       return html(response, pagedPage(pageNo))
+    }
+    if (url.pathname === '/sign-page') return html(response, SIGN_PAGE)
+    if (url.pathname === '/api/signed') {
+      verifySigned(request, response).catch(error => json(response, { ok: false, error: String(error?.message || error) }))
+      return
+    }
+    if (url.pathname === '/api/block') {
+      response.writeHead(403, { 'content-type': 'text/html; charset=utf-8' })
+      response.end('<html><head><title>Security Page</title></head><body>NCGR access denied</body></html>')
+      return
     }
     if (url.pathname === '/frame') return html(response, frame)
     // 隐形第三方验证 iframe：只用来验证「不因隐藏 iframe 里的验证码字样误报」。

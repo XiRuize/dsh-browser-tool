@@ -2,10 +2,12 @@
 
 给 [DeepSeek Harness](https://github.com/deepseek-ai) 的浏览器操作插件：一个可长期驻留、默认后台静默的真实 Edge / Chromium 浏览器，加上面向「浏览 → 定位 → 提取 → 存证 → 批处理」的工具面。
 
-![status](https://img.shields.io/badge/status-0.8.2%20dev-brightgreen)
+![status](https://img.shields.io/badge/status-0.9.0%20ready-orange)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![runtime](https://img.shields.io/badge/runtime-Node.js%2020%2B%20%7C%2022-339933)
 
+> **0.9.0（反拦截通道）**：`browser_fetch` 新增 curl 引擎（浏览器 TLS/UA、绕系统代理、Cookie jar）与 mentis 系门户的表单哈希签名（sha256 → `encparam` + `hashval`），403/429/安全页统一识别为 `blocked` 并给下一步建议。工具面仍为 18 个。
+>
 > **0.8.0（提速版）**：工具面 23 → 18，每请求 schema 27.8KB → 21.0KB（≈8.7k → 6.6k tokens，−24%）；新增内容缓存（命中 0–2ms）与精简回包（`detail=compact`）。
 >
 > **破坏性变更**：`browser_observe` / `browser_inspect` / `browser_extract` / `browser_screenshot` → **`browser_read`**；`browser_batch` → **`browser_act.steps`**；`browser_forum` → **`browser_site`**。迁移见下文「0.8 迁移」。版本演进见 [`CHANGELOG.md`](CHANGELOG.md)。
@@ -91,6 +93,25 @@ browser_fetch { url: "https://api.example.com/quote" }
 - 角色分 `reader` / `writer`：reader 只能观测与提取，写动作会被拒绝。
 - 每个标签页有稳定 ID 与 owner；同一标签页的写操作串行（per-tab `read` / `write` 锁），不同标签页可并行。
 - 租约带过期时间；交接（handoff）时写摘要，避免重复操作。
+
+### 反拦截通道（0.9）
+
+有些门户按 TLS 指纹/客户端特征拒绝请求（dataroom 实测：Python urllib 被 TLS EOF，curl 正常）。`browser_fetch` 因此提供第二条 HTTP 通道，并内建两类实机验证过的机制：
+
+- **`engine: "curl"`**：系统 curl，浏览器 UA / `--noproxy '*'` / Cookie jar / Referer；Windows 自带 curl 若没有 HTTP/2 会自动降级，不会因此报错。
+- **`sign: { kind: "form-hash" }`**：复现 mentis 系门户（巴林 TenderBoard / 阿曼 Esnaad 同族）的 `createFormHash`——按 DOM 顺序拼非空值 → sha256 得到 `hashval`，字段名得到 `encparam`，再带上会话 Cookie POST。
+- **`blocked` 识别**：403/429/Security Page/NCGR/F5/Cloudflare 统一返回 `blocked:true` + 原因 + 建议（换引擎 / 可见窗口 / CDP），而不是让模型自己猜 403 的含义。
+
+```js
+// 换 TLS 栈直取 JSON
+browser_fetch { url: "https://portal.example/api/list", engine: "curl", cookieJar: "~/.dsh/browser-tool/cookies/portal.txt" }
+
+// 复现表单哈希并 POST
+browser_fetch { engine: "curl", url: "https://etendering.example/product/publicDashReplica",
+  sign: { kind: "form-hash", overrides: { tabFlag: "1" } } }
+```
+
+边界：只用于**已授权目标**，遵守站点条款与速率限制；不做验证码识别/绕过，不用于规避付费墙或封锁（见 [`SECURITY.md`](SECURITY.md)）。
 
 ### 统一读取与内容缓存
 
@@ -229,7 +250,7 @@ C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
 | `browser_act` | 单步动作（click/type/press/scroll/…）或 `steps` 多步（≤50 步，含 extract/goto）；默认回读核验；`label` 显示角标 |
 | `browser_paginate` | 自动识别「下一页」并一次抓 N 页（默认 5，上限 20）；无下一页 / 无变化提前停止，records 合并 |
 | `browser_site` | 站点工具注册表：`list` / `match` / `run`；内置 `qq-forum`，清单来自 `<siteToolsDir>/*.json` |
-| `browser_fetch` | HTTP 快通道：复用登录 Cookie/UA 直连，不渲染；默认走内容缓存，命中标注 `cached` |
+| `browser_fetch` | HTTP 通道：playwright（复用登录 Cookie）或 curl（TLS/UA/绕代理）；支持 `sign=form-hash` 表单哈希签名与 `blocked` 识别；GET 走内容缓存 |
 | `browser_collect` | urls 最多 200、单次处理 100；页面复用 + 并发 8 + JSONL 增量检查点；`render=false` 走快通道 |
 | `browser_network` | start / stop / list / get / clear / export(HAR) |
 | `browser_tabs` | list / switch / close / claim / release |
