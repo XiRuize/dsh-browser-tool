@@ -2,11 +2,11 @@
 
 给 [DeepSeek Harness](https://github.com/deepseek-ai) 的浏览器操作插件：一个可长期驻留、默认后台静默的真实 Edge / Chromium 浏览器，加上面向「浏览 → 定位 → 提取 → 存证 → 批处理」的工具面。
 
-![status](https://img.shields.io/badge/status-0.9.1%20ready-orange)
+![status](https://img.shields.io/badge/status-0.9.1%20published-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![runtime](https://img.shields.io/badge/runtime-Node.js%2020%2B%20%7C%2022-339933)
 
-> **0.9.1（无状态取数阶梯 + 状态码重试）**：`browser_fetch.ladder` 一次调用按「官方 API → RSS/Atom → 静态 HTML → 动态渲染」逐级尝试，返回生效层级与逐级证据；请求层补上 408/429/5xx 重试（遵守 `Retry-After`、指数退避+抖动）与单次 `stats`。无站点记忆、无站点硬编码。
+> **0.9.1（无状态取数阶梯 + 状态码重试，已发布）**：`browser_fetch.ladder` 一次调用按「官方 API → RSS/Atom → 静态 HTML → 动态渲染」逐级尝试，返回生效层级与逐级证据；请求层补上 408/429/5xx 重试（遵守 `Retry-After`、指数退避+抖动）与单次 `stats`。无站点记忆、无站点硬编码。
 >
 > **0.9.0（反拦截通道，已发布）**：`browser_fetch` 新增 curl 引擎（浏览器 TLS/UA、绕系统代理、Cookie jar）与 mentis 系门户的表单哈希签名（sha256 → `encparam` + `hashval`），403/429/安全页统一识别为 `blocked` 并给下一步建议。工具面仍为 18 个。
 >
