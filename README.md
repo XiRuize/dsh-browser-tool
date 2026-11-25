@@ -2,10 +2,12 @@
 
 给 [DeepSeek Harness](https://github.com/deepseek-ai) 的浏览器操作插件：一个可长期驻留、默认后台静默的真实 Edge / Chromium 浏览器，加上面向「浏览 → 定位 → 提取 → 存证 → 批处理」的工具面。
 
-![status](https://img.shields.io/badge/status-0.9.0%20published-brightgreen)
+![status](https://img.shields.io/badge/status-0.9.1%20ready-orange)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![runtime](https://img.shields.io/badge/runtime-Node.js%2020%2B%20%7C%2022-339933)
 
+> **0.9.1（无状态取数阶梯 + 状态码重试）**：`browser_fetch.ladder` 一次调用按「官方 API → RSS/Atom → 静态 HTML → 动态渲染」逐级尝试，返回生效层级与逐级证据；请求层补上 408/429/5xx 重试（遵守 `Retry-After`、指数退避+抖动）与单次 `stats`。无站点记忆、无站点硬编码。
+>
 > **0.9.0（反拦截通道，已发布）**：`browser_fetch` 新增 curl 引擎（浏览器 TLS/UA、绕系统代理、Cookie jar）与 mentis 系门户的表单哈希签名（sha256 → `encparam` + `hashval`），403/429/安全页统一识别为 `blocked` 并给下一步建议。工具面仍为 18 个。
 >
 > **0.8.0（提速版）**：工具面 23 → 18，每请求 schema 27.8KB → 21.0KB（≈8.7k → 6.6k tokens，−24%）；新增内容缓存（命中 0–2ms）与精简回包（`detail=compact`）。
@@ -93,6 +95,31 @@ browser_fetch { url: "https://api.example.com/quote" }
 - 角色分 `reader` / `writer`：reader 只能观测与提取，写动作会被拒绝。
 - 每个标签页有稳定 ID 与 owner；同一标签页的写操作串行（per-tab `read` / `write` 锁），不同标签页可并行。
 - 租约带过期时间；交接（handoff）时写摘要，避免重复操作。
+
+### 无状态取数阶梯（0.9.1）
+
+一次调用按你给的优先级逐级尝试，每级都有证据，失败才升级：
+
+```js
+browser_fetch {
+  url: "https://example.gov/tenders",
+  ladder: {
+    tiers: ["api", "feed", "static", "render"],   // 可裁剪，例如只允许 feed+static
+    api: { url: "https://example.gov/api/tenders" }, // 有官方免费 API 时优先
+    selector: "#list", itemSelector: "li", fields: { title: "h3" },
+    minItems: 3
+  }
+}
+```
+
+| 层级 | 判定 | 失败后 |
+|---|---|---|
+| `api` | 显式给的 API 返回 2xx JSON，且条目数 ≥ `minItems` | 降级 feed |
+| `feed` | 页面 `<link rel=alternate>` 或 `/feed`、`/rss.xml` 等候选能解析出条目 | 降级 static |
+| `static` | 静态 HTML（不等待 JS）按 selector/records 解析出条目 | 降级 render |
+| `render` | 打开页面等 JS 水合后再解析 | 返回“阶梯穷尽”+ 各级原因 |
+
+返回 `{ tier, attempts, data, count, stats }`；不写站点记忆、不落“下次用哪个引擎”的状态。请求层同时补上状态码重试（GET 全量、写请求只对 408/429/503），`stats` 里有 `requests/retries/blocked/byStatus/byTier`。
 
 ### 反拦截通道（0.9）
 

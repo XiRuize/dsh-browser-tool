@@ -380,6 +380,29 @@ try {
   check(blocked.blocked === true, '拦截页标记 blocked')
   check(/403|Security|NCGR/.test(String(blocked.blockReason || '') + String(blocked.error || '')), 'blocked 带原因')
   check(/建议/.test(String(blocked.hint || '')), 'blocked 带下一步建议')
+
+  step = 'browser_fetch 无状态阶梯 + 状态码重试'
+  const feedLadder = await call('browser_fetch', {
+    url: `${base}/feed-page`,
+    ladder: { tiers: ['feed', 'static'], minItems: 1 },
+    cache: false,
+  })
+  check(feedLadder.tier === 'feed' && (feedLadder.data?.length || 0) >= 2, 'ladder 命中 RSS')
+  const staticLadder = await call('browser_fetch', {
+    url: `${base}/static-news`,
+    ladder: { tiers: ['static'], selector: '#news', itemSelector: 'li', minItems: 2 },
+    cache: false,
+  })
+  check(staticLadder.tier === 'static' && (staticLadder.data?.length || 0) >= 2, 'ladder 静态解析')
+  const dynamicLadder = await call('browser_fetch', {
+    url: `${base}/dynamic-news`,
+    ladder: { tiers: ['static', 'render'], selector: '#news', itemSelector: 'li', minItems: 2 },
+    cache: false,
+  })
+  check(dynamicLadder.tier === 'render' && (dynamicLadder.data?.length || 0) >= 2, 'ladder 动态渲染兜底')
+  const flaky = await call('browser_fetch', { url: `${base}/flaky`, retries: 2, cache: false })
+  check(flaky.status === 200 && flaky.stats?.retries >= 1, '状态码重试生效')
+  check(flaky.stats?.byStatus?.[503] >= 1, 'stats 记录 503')
   await call('browser_open', { url: `${base}/list`, tab: mainTab })
   const records = await call('browser_read', { source: 'extract',
     mode: 'records',

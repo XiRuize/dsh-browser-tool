@@ -2,10 +2,12 @@
 
 Browser-operation plugin for [DeepSeek Harness](https://github.com/deepseek-ai): a long-lived, silent-by-default real Edge / Chromium browser plus a tool surface for *observe → locate → act → verify → extract → archive*.
 
-![status](https://img.shields.io/badge/status-0.9.0%20published-brightgreen)
+![status](https://img.shields.io/badge/status-0.9.1%20ready-orange)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![runtime](https://img.shields.io/badge/runtime-Node.js%2020%2B%20%7C%2022-339933)
 
+> **0.9.1 (stateless acquisition ladder + status retries)**: `browser_fetch.ladder` tries official API → RSS/Atom → static HTML → rendered DOM in one call and reports the winning tier with per-tier evidence; requests now retry 408/429/5xx honoring `Retry-After` with exponential backoff, and return per-run `stats`. No site memory, no per-site code.
+>
 > **0.9.0 (anti-blocking channel, published)**: `browser_fetch` gains a curl engine (browser TLS/UA, proxy bypass, cookie jar) and mentis-family form-hash signing (sha256 → `encparam` + `hashval`), plus unified `blocked` detection for 403/429/security pages. Still 18 tools.
 >
 > **0.8.0 (speed release)**: 18 tools instead of 23; tool schema per request 27.8KB → 21.0KB (≈8.7k → 6.6k tokens, −24%); content cache (0–2 ms hits) and compact replies.

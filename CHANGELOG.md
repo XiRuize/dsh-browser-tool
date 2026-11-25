@@ -2,6 +2,21 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。本文件只记录真实发生或明确标记为「进行中」的变更，不把计划写成已发布事实。
 
+## [未发布] — 0.9.1（无状态取数阶梯 + 状态码重试）
+
+### 新增
+
+- **`browser_fetch.ladder`**：一次调用按「官方 API → RSS/Atom → 静态 HTML → 动态渲染」逐级尝试；每级产出 `{tier, ok, status, reason, ms}` 证据，成功即停，失败才升级。可裁剪 `tiers`，无站点记忆、无站点硬编码。
+- **RSS/Atom 解析**：`<link rel=alternate>` 与 `/feed`、`/rss.xml`、`/atom.xml` 候选；RSS 2.0 / Atom 统一为 `{title, link, date, summary}`；相对链接自动补全。
+- **状态码重试**（借鉴 Scrapy RetryMiddleware）：408/425/429/500/502/503/504；GET/HEAD/OPTIONS 全量，写请求只对 408/429/503；遵守 `Retry-After`（秒/HTTP 日期），否则指数退避+抖动。
+- **单次运行统计** `stats`：`requests / retries / blocked / byStatus / byTier`，不落盘、不参与下次决策。
+- 静态层级用 `page.setContent` + 现有 `extractPage` 解析（不等待 JS）；渲染层级临时页抓取后关闭，不污染标签页列表。
+
+### 测试
+
+- unit 41/41：重试策略/Retry-After/退避、RSS/Atom 解析与发现、阶梯在 feed/static/render 间的选择与穷尽。
+- e2e 134 assertions：`/feed-page`→RSS、静态列表、JS 水合列表降到 render、`/flaky` 两次 503 后 200 且 `stats.retries>=1`、`stats.byStatus[503]`。
+
 ## [未发布] — 0.9.0（反拦截通道：curl 引擎 + 表单哈希签名 + 拦截识别）
 
 借鉴 `dataroom/央企海外中标尽调` 里已实机跑通的取数方法（`tb_fetch.py` / `daily_tender_scan.py` / `FormValidate.js`）。

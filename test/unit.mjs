@@ -27,6 +27,8 @@ import { ContentCache, cacheableResponse, stableStringify } from '../lib/cache.j
 import { buildCurlArgs, DEFAULT_UA } from '../lib/http-curl.js'
 import { detectBlock, blockHint } from '../lib/block-detect.js'
 import { applyOverrides, buildFormBody, buildFormHash, findFormAction, parseFormFields } from '../lib/form-sign.js'
+import { discoverFeedUrls, looksLikeFeed, parseFeed, runLadder } from '../lib/ladder.js'
+import { parseRetryAfter, retryDelayMs, shouldRetry } from '../lib/retry.js'
 import { hudText, shouldShowHud } from '../lib/hud.js'
 import { normalizePaginateOptions, countExtract } from '../lib/paginate.js'
 import { describeSites, loadSiteTools, matchUrl, normalizeManifest } from '../lib/site-tools.js'
@@ -1152,6 +1154,101 @@ test('block-detect：安全页/限流/网络错误与建议', () => {
   assert.match(blockHint('Cloudflare 人机验证', 'playwright'), /建议/)
 })
 
+test('retry：状态码策略、Retry-After 与退避', () => {
+  assert.equal(shouldRetry({ status: 503, method: 'GET', attempt: 1, maxAttempts: 3 }), true)
+  assert.equal(shouldRetry({ status: 503, method: 'GET', attempt: 3, maxAttempts: 3 }), false)
+  assert.equal(shouldRetry({ status: 503, method: 'GET', attempt: 1, maxAttempts: 3, blocked: true }), false)
+  assert.equal(shouldRetry({ status: 500, method: 'POST', attempt: 1, maxAttempts: 3 }), false)
+  assert.equal(shouldRetry({ status: 503, method: 'POST', attempt: 1, maxAttempts: 3 }), true)
+  assert.equal(shouldRetry({ status: 0, method: 'GET', attempt: 1, maxAttempts: 2 }), true)
+  assert.equal(shouldRetry({ status: 404, method: 'GET', attempt: 1, maxAttempts: 3 }), false)
+  assert.equal(parseRetryAfter('2'), 2000)
+  assert.equal(parseRetryAfter('bad'), null)
+  const delay = retryDelayMs({ attempt: 2, retryAfter: '1', baseMs: 100, jitter: 0 })
+  assert.equal(delay, 1000)
+  assert.ok(retryDelayMs({ attempt: 1, baseMs: 100, jitter: 0 }) >= 100)
+})
+
+test('feed：RSS/Atom 解析与 feed 发现', () => {
+  const rss = [
+    '<rss version="2.0"><channel><title>测试源</title>',
+    '<item><title>条目一</title><link>https://a.test/1</link><pubDate>Wed, 25 Nov 2026 10:00:00 GMT</pubDate><description><![CDATA[<p>摘要一</p>]]></description></item>',
+    '<item><title>条目二</title><link>/2</link></item>',
+    '</channel></rss>',
+  ].join('')
+  assert.equal(looksLikeFeed('application/rss+xml', ''), true)
+  const parsed = parseFeed(rss, 'https://a.test/feed.xml')
+  assert.equal(parsed.format, 'rss')
+  assert.equal(parsed.title, '测试源')
+  assert.equal(parsed.items.length, 2)
+  assert.equal(parsed.items[0].title, '条目一')
+  assert.equal(parsed.items[0].summary, '摘要一')
+  assert.equal(parsed.items[1].link, 'https://a.test/2')
+
+  const atom = [
+    '<feed xmlns="http://www.w3.org/2005/Atom"><title>Atom 源</title>',
+    '<entry><title>Atom 条</title><link rel="alternate" href="https://a.test/x"/><updated>2026-11-25T10:00:00Z</updated><summary>摘要</summary></entry>',
+    '</feed>',
+  ].join('')
+  const atomParsed = parseFeed(atom)
+  assert.equal(atomParsed.format, 'atom')
+  assert.equal(atomParsed.items[0].link, 'https://a.test/x')
+
+  const html = '<html><head><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head></html>'
+  const urls = discoverFeedUrls(html, 'https://a.test/page')
+  assert.equal(urls[0], 'https://a.test/atom.xml')
+  assert.ok(urls.length >= 2)
+})
+
+test('ladder：无状态阶梯按 API→Feed→静态→渲染 选择', async () => {
+  const feedXml = '<rss><channel><title>F</title><item><title>a</title><link>https://a.test/1</link></item><item><title>b</title><link>https://a.test/2</link></item></channel></rss>'
+  const pageHtml = '<html><head><link rel="alternate" type="application/rss+xml" href="/feed.xml"></head><body>no items</body></html>'
+  const fetchText = async ({ url }) => {
+    if (url.endsWith('/feed.xml')) return { status: 200, contentType: 'application/rss+xml', body: feedXml, finalUrl: url }
+    return { status: 200, contentType: 'text/html', body: pageHtml, finalUrl: url }
+  }
+  const feedRun = await runLadder({
+    url: 'https://a.test/page',
+    tiers: ['feed', 'static', 'render'],
+    fetchText,
+    extractStatic: async () => ({ mode: 'text', content: 'x', data: null }),
+    extractRender: async () => ({ mode: 'records', data: [] }),
+  })
+  assert.equal(feedRun.ok, true)
+  assert.equal(feedRun.tier, 'feed')
+  assert.equal(feedRun.data.length, 2)
+
+  const staticRun = await runLadder({
+    url: 'https://a.test/page',
+    tiers: ['static', 'render'],
+    fetchText,
+    extractStatic: async () => ({ mode: 'records', data: [{ title: 's1' }, { title: 's2' }] }),
+    extractRender: async () => ({ mode: 'records', data: [] }),
+  })
+  assert.equal(staticRun.tier, 'static')
+  assert.equal(staticRun.data.length, 2)
+
+  const renderRun = await runLadder({
+    url: 'https://a.test/page',
+    tiers: ['static', 'render'],
+    fetchText,
+    extractStatic: async () => ({ mode: 'records', data: [] }),
+    extractRender: async () => ({ mode: 'records', data: [{ title: 'r1' }] }),
+  })
+  assert.equal(renderRun.tier, 'render')
+
+  const exhausted = await runLadder({
+    url: 'https://a.test/page',
+    tiers: ['static', 'render'],
+    fetchText,
+    extractStatic: async () => ({ mode: 'records', data: [] }),
+    extractRender: async () => ({ mode: 'records', data: [] }),
+  })
+  assert.equal(exhausted.ok, false)
+  assert.equal(exhausted.tier, null)
+  assert.ok(exhausted.attempts.length >= 2)
+})
+
 test('ContentCache：稳定键、命中、清理与可缓存判定', async () => {
   const dir = path.join(tmpRoot, 'cache-unit')
   const cache = new ContentCache({ cacheDir: dir, cacheTtlMs: 60000, cacheMaxBytes: 1024 * 1024 })
@@ -1243,7 +1340,7 @@ test('tools.js 注册 18 个工具、schema 合法、并发安全分类与旧参
     browser_workspace: ['action', 'workspaceId', 'label', 'role', 'toAgent', 'tab', 'note'],
     browser_network: ['action', 'tab', 'urlPattern', 'resourceTypes', 'maxEntries', 'maxBodyChars', 'id', 'urlContains', 'maxChars'],
     browser_collect: ['urls', 'mode', 'selector', 'labels', 'fields', 'maxChars', 'limit', 'concurrency', 'delayMs', 'save', 'jobId', 'cursor', 'deadlineMs', 'checkpointPath'],
-    browser_fetch: ['url', 'method', 'headers', 'body', 'engine', 'cookieJar', 'referer', 'userAgent', 'sign', 'blockedPatterns', 'timeoutMs', 'retries', 'maxChars', 'save', 'cache', 'refresh'],
+    browser_fetch: ['url', 'method', 'headers', 'body', 'engine', 'cookieJar', 'referer', 'userAgent', 'sign', 'blockedPatterns', 'ladder', 'timeoutMs', 'retries', 'maxChars', 'save', 'cache', 'refresh'],
     browser_site: ['action', 'siteId', 'tool', 'args'],
     browser_show: ['action', 'visibility', 'tab', 'restoreTabs'],
     browser_scratch: ['action', 'jobId', 'path', 'maxChars'],

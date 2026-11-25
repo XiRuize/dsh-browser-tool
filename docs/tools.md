@@ -369,6 +369,7 @@ HTTP 通道：默认复用浏览器上下文的 Cookie / UA / Referer；可切�
 | `referer` | string | — | curl 的 Referer |
 | `userAgent` | string | 桌面 Chrome | curl 的 UA |
 | `sign` | object | — | `{ kind: "form-hash", page?, action?, overrides?, excluded? }` |
+| `ladder` | object | — | 无状态阶梯：`{ tiers?, api?, selector?, itemSelector?, fields?, minItems? }`；返回 `tier`、`attempts`、`stats` |
 | `blockedPatterns` | string[] | — | 额外拦截特征（正则字符串） |
 | `timeoutMs` | integer | 配置值 | 超时毫秒 |
 | `retries` | integer | `2` | 网络错误重试次数 |
@@ -378,6 +379,8 @@ HTTP 通道：默认复用浏览器上下文的 Cookie / UA / Referer；可切�
 | `refresh` | boolean | `false` | 强制绕过缓存 |
 
 返回 `{ ok, status, finalUrl, contentType, bytes, body, json, blocked, blockReason, hint, sign, engine, elapsedMs, savedPath }`。
+
+`ladder` 模式返回 `{ ok, tier, attempts, data, count, stats }`；`stats = { requests, retries, blocked, byStatus, byTier }`。阶梯顺序：`api`（显式端点）→ `feed`（RSS/Atom）→ `static`（不等待 JS）→ `render`（等水合），可通过 `tiers` 裁剪。
 `blocked=true` 时给出 `blockReason` 与 `hint`（换引擎 / 可见窗口 / CDP）。
 
 **表单哈希签名**（巴林/阿曼同族 mentis 框架）：

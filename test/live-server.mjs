@@ -154,6 +154,20 @@ async function verifySigned(request, response) {
     hasD: params.has('d'),
   })
 }
+
+const FEED_PAGE = '<html><head><link rel="alternate" type="application/rss+xml" href="/feed.xml"><title>Feed 页</title></head><body>feed page</body></html>'
+const FEED_XML = [
+  '<rss version="2.0"><channel><title>测试 Feed</title>',
+  '<item><title>Feed 条目一</title><link>/detail?n=101</link><pubDate>Wed, 25 Nov 2026 10:00:00 GMT</pubDate></item>',
+  '<item><title>Feed 条目二</title><link>/detail?n=102</link><pubDate>Wed, 25 Nov 2026 11:00:00 GMT</pubDate></item>',
+  '</channel></rss>',
+].join('')
+const STATIC_NEWS = '<html><head><title>静态新闻</title></head><body><ul id="news"><li>静态一</li><li>静态二</li></ul></body></html>'
+const DYNAMIC_NEWS = [
+  '<html><head><title>动态新闻</title></head><body><ul id="news"></ul>',
+  '<script>setTimeout(function(){var ul=document.getElementById("news");["动态一","动态二"].forEach(function(t){var li=document.createElement("li");li.textContent=t;ul.appendChild(li)})},120)</script>',
+  '</body></html>',
+].join('')
 function json(response, value) {
   response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
   response.end(JSON.stringify(value))
@@ -169,6 +183,7 @@ function html(response, value) {
  * @returns {Promise<{server: import('node:http').Server, base: string, port: number, close: () => Promise<void>}>}
  */
 export async function startLocalServer() {
+  let flakyHits = 0
   const server = http.createServer((request, response) => {
     const url = new URL(request.url || '/', 'http://127.0.0.1')
     if (url.pathname === '/api/company') {
@@ -184,6 +199,24 @@ export async function startLocalServer() {
     if (url.pathname === '/paged') {
       const pageNo = Math.min(3, Math.max(1, Number(url.searchParams.get('page')) || 1))
       return html(response, pagedPage(pageNo))
+    }
+    if (url.pathname === '/feed-page') return html(response, FEED_PAGE)
+    if (url.pathname === '/feed.xml') {
+      response.writeHead(200, { 'content-type': 'application/rss+xml; charset=utf-8' })
+      response.end(FEED_XML)
+      return
+    }
+    if (url.pathname === '/static-news') return html(response, STATIC_NEWS)
+    if (url.pathname === '/dynamic-news') return html(response, DYNAMIC_NEWS)
+    if (url.pathname === '/flaky') {
+      flakyHits += 1
+      if (flakyHits <= 2) {
+        response.writeHead(503, { 'content-type': 'text/plain; charset=utf-8', 'retry-after': '0' })
+        response.end(`busy ${flakyHits}`)
+        return
+      }
+      json(response, { ok: true, hits: flakyHits })
+      return
     }
     if (url.pathname === '/sign-page') return html(response, SIGN_PAGE)
     if (url.pathname === '/api/signed') {
